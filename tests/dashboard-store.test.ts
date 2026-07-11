@@ -23,6 +23,7 @@ function createSnapshot(projectsSummary = "第一版"): LocalSnapshot {
       projects: { count: 3, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
       wiki: { count: 4, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } }
     },
+    domains: [],
     projectsSummary,
     healthSummary: "可用",
     tasks: [],

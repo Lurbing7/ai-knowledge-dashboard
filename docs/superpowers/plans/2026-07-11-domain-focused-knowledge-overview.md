@@ -34,7 +34,7 @@
 - 修改：`tests/action-context.test.ts`
 - 修改：`tests/dashboard-store.test.ts`
 
-- [ ] **步骤 1：在数据测试中定义直接子领域、空领域和最近三篇的期望**
+- [x] **步骤 1：在数据测试中定义直接子领域、空领域和最近三篇的期望**
 
 扩展测试用 `MemoryVaultReader`，允许显式提供直接文件夹：
 
@@ -92,7 +92,7 @@ it("builds direct Domain summaries with stable activity ordering", async () => {
 
 在所有手写 `LocalSnapshot` fixture 中加入 `domains: []`。
 
-- [ ] **步骤 2：运行定向测试并确认类型或字段缺失失败**
+- [x] **步骤 2：运行定向测试并确认类型或字段缺失失败**
 
 运行：
 
@@ -102,7 +102,7 @@ npm test -- --run tests/data-sources.test.ts tests/action-context.test.ts tests/
 
 预期：FAIL，错误包含 `listFolders` 不属于 `VaultReader` 或 `domains` 不属于 `LocalSnapshot`。
 
-- [ ] **步骤 3：增加领域类型和 Vault 文件夹枚举接口**
+- [x] **步骤 3：增加领域类型和 Vault 文件夹枚举接口**
 
 在 `src/types.ts` 增加：
 
@@ -140,7 +140,7 @@ async listFolders(path: string): Promise<string[]> {
 }
 ```
 
-- [ ] **步骤 4：实现领域归组、活动位置和稳定排序**
+- [x] **步骤 4：实现领域归组、活动位置和稳定排序**
 
 在 `src/data-sources.ts` 增加纯 helper：
 
@@ -181,7 +181,7 @@ const domains = await buildDomainSummaries(reader, settings.sources.domain, area
 return { counts, areas, domains, projectsSummary, healthSummary, tasks, userProfileSummary, issues };
 ```
 
-- [ ] **步骤 5：证明领域详情不会进入 DeepSeek 上下文**
+- [x] **步骤 5：证明领域详情不会进入 DeepSeek 上下文**
 
 在 `tests/action-context.test.ts` 的 snapshot 放入一个带路径和标题的领域摘要，并断言：
 
@@ -192,7 +192,7 @@ expect(json).not.toContain("domain/it/private-note.md");
 expect(json).not.toContain("DomainSummary");
 ```
 
-- [ ] **步骤 6：运行测试确认通过**
+- [x] **步骤 6：运行测试确认通过**
 
 运行：
 
@@ -202,7 +202,7 @@ npm test -- --run tests/data-sources.test.ts tests/action-context.test.ts tests/
 
 预期：三个测试文件全部 PASS。
 
-- [ ] **步骤 7：提交领域数据层**
+- [x] **步骤 7：提交领域数据层**
 
 ```bash
 git add src/types.ts src/data-sources.ts tests/data-sources.test.ts tests/action-context.test.ts tests/dashboard-store.test.ts

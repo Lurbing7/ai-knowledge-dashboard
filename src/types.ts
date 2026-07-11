@@ -59,6 +59,15 @@ export interface RecentNote {
   mtime: number;
 }
 
+export interface DomainSummary {
+  name: string;
+  path: string;
+  count: number;
+  latestMtime: number | null;
+  recentLocation: string;
+  recentNotes: RecentNote[];
+}
+
 export interface AreaSignal {
   tone: "neutral" | "attention" | "healthy";
   text: string;
@@ -85,6 +94,7 @@ export interface LocalSnapshot {
     wiki: number;
   };
   areas: AreaSummaries;
+  domains: DomainSummary[];
   projectsSummary: string;
   healthSummary: string;
   tasks: TaskSummary[];

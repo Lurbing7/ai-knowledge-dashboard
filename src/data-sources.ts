@@ -1,10 +1,11 @@
-import type { App } from "obsidian";
+import type { App, TFolder } from "obsidian";
 import type {
   AreaSignal,
   AreaSummaries,
   AreaSummary,
   DashboardSettings,
   DataSourceSetting,
+  DomainSummary,
   LocalSnapshot,
   TaskSummary
 } from "./types";
@@ -13,6 +14,7 @@ export interface VaultReader {
   exists(path: string): Promise<boolean>;
   read(path: string): Promise<string>;
   listMarkdown(path: string): Promise<Array<{ path: string; mtime: number }>>;
+  listFolders(path: string): Promise<string[]>;
 }
 
 export class ObsidianVaultReader implements VaultReader {
@@ -35,6 +37,14 @@ export class ObsidianVaultReader implements VaultReader {
     return this.app.vault.getMarkdownFiles()
       .filter((file) => file.path === path || file.path.startsWith(prefix))
       .map((file) => ({ path: file.path, mtime: file.stat.mtime }));
+  }
+
+  async listFolders(path: string): Promise<string[]> {
+    const folder = this.app.vault.getFolderByPath(path);
+    if (!folder) return [];
+    return folder.children
+      .filter((child): child is TFolder => "children" in child)
+      .map((child) => child.path);
   }
 }
 
@@ -170,6 +180,34 @@ function areaSummary(files: ListedNote[], signal: AreaSignal): AreaSummary {
   return { count: files.length, recentNotes: recentNotes(files), signal };
 }
 
+function buildDomainSummary(folderPath: string, files: ListedNote[]): DomainSummary {
+  const name = folderPath.split("/").pop() || folderPath;
+  const owned = files.filter((file) => file.path.startsWith(`${folderPath}/`));
+  const latest = recentNotes(owned);
+  const relativeParts = latest[0]?.path.slice(folderPath.length + 1).split("/") ?? [];
+  const parentParts = relativeParts.slice(0, -1);
+  return {
+    name,
+    path: folderPath,
+    count: owned.length,
+    latestMtime: latest[0]?.mtime ?? null,
+    recentLocation: [name, ...parentParts].join(" / "),
+    recentNotes: latest
+  };
+}
+
+async function buildDomainSummaries(
+  reader: VaultReader,
+  setting: DataSourceSetting,
+  files: ListedNote[]
+): Promise<DomainSummary[]> {
+  if (!setting.enabled || !await reader.exists(setting.path)) return [];
+  const folders = await reader.listFolders(setting.path);
+  return folders.map((path) => buildDomainSummary(path, files))
+    .sort((left, right) => (right.latestMtime ?? -1) - (left.latestMtime ?? -1)
+      || left.name.localeCompare(right.name, "zh-Hans-CN"));
+}
+
 function buildAreas(
   files: Record<keyof AreaSummaries, ListedNote[]>,
   settings: DashboardSettings,
@@ -238,6 +276,7 @@ export async function collectLocalSnapshot(
     wiki: areaFiles.wiki.length
   };
   const areas = buildAreas(areaFiles, settings, now);
+  const domains = await buildDomainSummaries(reader, settings.sources.domain, areaFiles.domain);
 
   let projectsSummary = "";
   if (settings.sources.projects.enabled && await reader.exists(settings.sources.projects.path)) {
@@ -275,6 +314,7 @@ export async function collectLocalSnapshot(
   return {
     counts,
     areas,
+    domains,
     projectsSummary,
     healthSummary,
     tasks,
