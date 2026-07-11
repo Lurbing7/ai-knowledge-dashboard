@@ -26,6 +26,7 @@ export interface DashboardViewController {
   settings: DashboardSettings;
   store: DashboardStore;
   generateAdvice(includeUserProfile: boolean): Promise<void>;
+  setFocusedDomainPath(path: string): Promise<void>;
   openSettings(): void;
 }
 

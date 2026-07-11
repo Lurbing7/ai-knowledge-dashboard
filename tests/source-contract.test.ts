@@ -16,6 +16,7 @@ const mainSource = readFileSync("src/main.ts", "utf8");
 const allSource = readTypeScriptTree("src");
 const dashboardViewSource = readFileSync("src/views/dashboard-view.ts", "utf8");
 const dashboardStyles = readFileSync("src/styles.css", "utf8");
+const settingsTabSource = readFileSync("src/settings-tab.ts", "utf8");
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8")) as {
   minAppVersion: string;
   isDesktopOnly: boolean;
@@ -97,6 +98,13 @@ describe("final source contract", () => {
   it("opens plugin settings instead of showing an instruction notice", () => {
     expect(dashboardViewSource).toContain("controller.openSettings");
     expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
+  });
+
+  it("persists the focused Domain as a local hidden preference", () => {
+    expect(mainSource).toContain("async setFocusedDomainPath(path: string)");
+    expect(mainSource).toContain("this.settings.focusedDomainPath = normalized");
+    expect(mainSource).toContain("await this.saveData(this.settings)");
+    expect(settingsTabSource).not.toContain("focusedDomainPath");
   });
 
   it("uses the restrained Obsidian-integrated dashboard palette", () => {

@@ -45,6 +45,7 @@ export interface DashboardSettings {
   deepseekSecretName: string;
   sources: DashboardSources;
   latestAdvice: AdviceState | null;
+  focusedDomainPath?: string;
 }
 
 export interface TaskSummary {

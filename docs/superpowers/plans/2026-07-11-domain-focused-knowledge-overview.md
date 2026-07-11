@@ -220,7 +220,7 @@ git commit -m "feat: 生成 Domain 子领域摘要"
 - 修改：`src/main.ts`
 - 修改：`tests/source-contract.test.ts`
 
-- [ ] **步骤 1：为默认选择、失效回退和短标识编写失败测试**
+- [x] **步骤 1：为默认选择、失效回退和短标识编写失败测试**
 
 创建 `tests/domain-focus.test.ts`：
 
@@ -263,7 +263,7 @@ expect(migrateSettings({ focusedDomainPath: " domain\\it " }).focusedDomainPath)
 expect(migrateSettings({ focusedDomainPath: " / " }).focusedDomainPath).toBeUndefined();
 ```
 
-- [ ] **步骤 2：运行定向测试确认模块和设置字段缺失**
+- [x] **步骤 2：运行定向测试确认模块和设置字段缺失**
 
 运行：
 
@@ -273,7 +273,7 @@ npm test -- --run tests/domain-focus.test.ts tests/settings.test.ts
 
 预期：FAIL，错误包含无法解析 `../src/domain-focus` 或 `focusedDomainPath` 缺失。
 
-- [ ] **步骤 3：实现纯领域焦点 helper**
+- [x] **步骤 3：实现纯领域焦点 helper**
 
 创建 `src/domain-focus.ts`：
 
@@ -293,7 +293,7 @@ export function domainShortLabel(name: string): string {
 }
 ```
 
-- [ ] **步骤 4：迁移本地聚焦路径**
+- [x] **步骤 4：迁移本地聚焦路径**
 
 在 `DashboardSettings` 增加：
 
@@ -309,7 +309,7 @@ focusedDomainPath: normalizePath(candidate.focusedDomainPath) || undefined,
 
 不要在 `DashboardSettingTab` 中增加设置项。
 
-- [ ] **步骤 5：为 controller 增加最小持久化入口**
+- [x] **步骤 5：为 controller 增加最小持久化入口**
 
 在 `DashboardViewController` 增加：
 
@@ -330,7 +330,7 @@ async setFocusedDomainPath(path: string): Promise<void> {
 
 从 `./settings` 同时导入 `normalizePath`。此方法不调用 `store.refresh()`。
 
-- [ ] **步骤 6：锁定本地保存、不刷新和不进入 Settings UI 的源码契约**
+- [x] **步骤 6：锁定本地保存、不刷新和不进入 Settings UI 的源码契约**
 
 在 `tests/source-contract.test.ts` 增加：
 
@@ -341,7 +341,7 @@ expect(mainSource).toContain("await this.saveData(this.settings)");
 expect(readFileSync("src/settings-tab.ts", "utf8")).not.toContain("focusedDomainPath");
 ```
 
-- [ ] **步骤 7：运行测试确认通过**
+- [x] **步骤 7：运行测试确认通过**
 
 运行：
 
@@ -351,7 +351,7 @@ npm test -- --run tests/domain-focus.test.ts tests/settings.test.ts tests/source
 
 预期：三个测试文件全部 PASS。
 
-- [ ] **步骤 8：提交聚焦状态逻辑**
+- [x] **步骤 8：提交聚焦状态逻辑**
 
 ```bash
 git add src/domain-focus.ts tests/domain-focus.test.ts src/types.ts src/settings.ts tests/settings.test.ts src/main.ts src/views/dashboard-view.ts tests/source-contract.test.ts
