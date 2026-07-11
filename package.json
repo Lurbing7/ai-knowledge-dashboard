@@ -5,7 +5,9 @@
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production && node scripts/copy-styles.mjs",
+    "test": "vitest run",
+    "check": "tsc -noEmit -skipLibCheck && vitest run",
+    "build": "npm run check && node esbuild.config.mjs production && node scripts/copy-styles.mjs",
     "install:notes": "npm run build && node scripts/install-local.mjs"
   },
   "keywords": [
@@ -22,6 +24,7 @@
     "builtin-modules": "^5.0.0",
     "esbuild": "^0.25.0",
     "obsidian": "^1.8.7",
-    "typescript": "^5.8.0"
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10"
   }
 }
