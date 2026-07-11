@@ -40,6 +40,8 @@ export interface DashboardSources {
 export interface DashboardSettings {
   actionLimit: number;
   deepseekModel: "deepseek-v4-flash" | "deepseek-v4-pro";
+  deepseekThinkingEnabled: boolean;
+  deepseekReasoningEffort: "high" | "max";
   deepseekSecretName: string;
   sources: DashboardSources;
   latestAdvice: AdviceState | null;

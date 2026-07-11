@@ -10,6 +10,8 @@ const source = (path: string, enabled = true): DataSourceSetting => ({ enabled, 
 export const DEFAULT_SETTINGS: DashboardSettings = {
   actionLimit: 3,
   deepseekModel: "deepseek-v4-flash",
+  deepseekThinkingEnabled: true,
+  deepseekReasoningEffort: "high",
   deepseekSecretName: "",
   sources: {
     inbox: source("inbox"),
@@ -84,6 +86,10 @@ export function migrateSettings(value: unknown): DashboardSettings {
   return {
     actionLimit,
     deepseekModel,
+    deepseekThinkingEnabled: typeof candidate.deepseekThinkingEnabled === "boolean"
+      ? candidate.deepseekThinkingEnabled
+      : DEFAULT_SETTINGS.deepseekThinkingEnabled,
+    deepseekReasoningEffort: candidate.deepseekReasoningEffort === "max" ? "max" : "high",
     deepseekSecretName: typeof candidate.deepseekSecretName === "string"
       ? candidate.deepseekSecretName.trim()
       : "",

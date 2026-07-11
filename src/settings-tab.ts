@@ -65,6 +65,31 @@ export class DashboardSettingTab extends PluginSettingTab {
         }));
 
     new Setting(containerEl)
+      .setName("Enable DeepSeek Thinking")
+      .setDesc("开启后让 DeepSeek 先推理再生成行动建议；响应时间和 Token 消耗会增加。")
+      .addToggle((toggle) => toggle
+        .setValue(this.controller.settings.deepseekThinkingEnabled)
+        .onChange(async (value) => {
+          this.controller.settings.deepseekThinkingEnabled = value;
+          await this.controller.saveSettings();
+          this.display();
+        }));
+
+    if (this.controller.settings.deepseekThinkingEnabled) {
+      new Setting(containerEl)
+        .setName("Thinking effort")
+        .setDesc("标准适合日常建议；最强适合复杂规划，并会使用更多时间和 Token。")
+        .addDropdown((dropdown) => dropdown
+          .addOption("high", "标准（high）")
+          .addOption("max", "最强（max）")
+          .setValue(this.controller.settings.deepseekReasoningEffort)
+          .onChange(async (value) => {
+            this.controller.settings.deepseekReasoningEffort = value === "max" ? "max" : "high";
+            await this.controller.saveSettings();
+          }));
+    }
+
+    new Setting(containerEl)
       .setName("Test DeepSeek connection")
       .setDesc("只测试密钥和模型，不发送知识库上下文。")
       .addButton((button) => button.setButtonText("Test").onClick(async () => {
