@@ -307,8 +307,14 @@ export class DashboardView extends ItemView {
   ): void {
     const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
     const heading = card.createDiv({ cls: "akd-area-heading" });
-    heading.createEl("span", { text: label });
-    heading.createEl("strong", { text: String(area.count) });
+    const title = heading.createDiv({ cls: "akd-area-title" });
+    title.createEl("span", { text: label });
+    title.createEl("strong", { text: String(area.count) });
+    const all = heading.createEl("button", { cls: "akd-area-link", text: "查看 →" });
+    all.addEventListener("click", () => {
+      this.activePage = page;
+      this.render();
+    });
     card.createDiv({
       cls: `akd-area-signal is-${area.signal.tone}`,
       text: area.signal.text
@@ -316,16 +322,14 @@ export class DashboardView extends ItemView {
     const notes = card.createDiv({ cls: "akd-recent-notes" });
     area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
     if (area.recentNotes.length === 0) notes.createEl("small", { text: "暂无最近笔记" });
-    const all = card.createEl("button", { cls: "akd-area-link", text: "查看全部" });
-    all.addEventListener("click", () => {
-      this.activePage = page;
-      this.render();
-    });
   }
 
   private renderRecentNote(parent: HTMLElement, note: RecentNote): void {
-    const button = parent.createEl("button", { cls: "akd-recent-note" });
-    button.createSpan({ text: note.title });
+    const button = parent.createEl("button", {
+      cls: "akd-recent-note",
+      attr: { title: note.title }
+    });
+    button.createSpan({ cls: "akd-recent-note-title", text: note.title });
     button.createEl("small", { text: formatRelativeTime(note.mtime) });
     button.addEventListener("click", () => {
       const file = this.app.vault.getFileByPath(note.path);

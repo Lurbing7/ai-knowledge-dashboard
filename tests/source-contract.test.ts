@@ -69,6 +69,20 @@ describe("final source contract", () => {
     expect(dashboardStyles).not.toContain(".akd-hero");
   });
 
+  it("adapts area cards to the dashboard container and preserves long titles", () => {
+    expect(dashboardStyles).toContain("container-type: inline-size");
+    expect(dashboardStyles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
+    expect(dashboardStyles).toContain("@container (max-width: 760px)");
+    expect(dashboardStyles).not.toContain("repeat(4, minmax(0, 1fr))");
+    expect(dashboardStyles).toContain("-webkit-line-clamp: 2");
+    expect(dashboardStyles).toContain("overflow-wrap: anywhere");
+    expect(dashboardStyles).toContain("appearance: none");
+    expect(dashboardStyles).toContain("box-shadow: none");
+    expect(dashboardViewSource).toContain('attr: { title: note.title }');
+    expect(dashboardViewSource).toContain('cls: "akd-recent-note-title"');
+    expect(dashboardViewSource).toContain('text: "查看 →"');
+  });
+
   it("opens plugin settings instead of showing an instruction notice", () => {
     expect(dashboardViewSource).toContain("controller.openSettings");
     expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
@@ -91,7 +105,7 @@ describe("final source contract", () => {
     expect(dashboardViewSource).toContain("akd-spinner");
     expect(dashboardViewSource).toContain("正在思考并生成行动建议");
     expect(dashboardViewSource).toContain("recentNotes");
-    expect(dashboardViewSource).toContain("查看全部");
+    expect(dashboardViewSource).toContain("查看 →");
     expect(dashboardViewSource).toContain('["wiki", "Wiki"]');
     expect(dashboardStyles).toContain("@keyframes akd-spin");
     expect(dashboardStyles).toContain("prefers-reduced-motion: reduce");
