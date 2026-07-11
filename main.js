@@ -576,6 +576,12 @@ var ObsidianDeepSeekTransport = class {
   }
 };
 
+// src/open-plugin-settings.ts
+function openPluginSettings(host, pluginId) {
+  host.setting.open();
+  host.setting.openTabById(pluginId);
+}
+
 // src/settings.ts
 var source = (path, enabled = true) => ({ enabled, path });
 var DEFAULT_SETTINGS = {
@@ -797,9 +803,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
       cls: "akd-nav-item akd-nav-settings",
       text: "Settings"
     });
-    settings.addEventListener("click", () => new import_obsidian3.Notice(
-      "Open Settings \u2192 Community plugins \u2192 AI Knowledge Dashboard."
-    ));
+    settings.addEventListener("click", () => this.controller.openSettings());
   }
   renderDashboard(parent) {
     var _a, _b, _c, _d;
@@ -1001,6 +1005,9 @@ var AiKnowledgeDashboardPlugin = class extends import_obsidian4.Plugin {
   }
   async activateDashboardView() {
     await activateDashboard(this.app.workspace, DASHBOARD_VIEW_TYPE);
+  }
+  openSettings() {
+    openPluginSettings(this.app, this.manifest.id);
   }
   async saveSettings() {
     this.settings = migrateSettings(this.settings);

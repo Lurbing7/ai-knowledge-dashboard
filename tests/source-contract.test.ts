@@ -54,6 +54,11 @@ describe("final source contract", () => {
     expect(dashboardViewSource).not.toContain("Knowledge OS");
   });
 
+  it("opens plugin settings instead of showing an instruction notice", () => {
+    expect(dashboardViewSource).toContain("controller.openSettings");
+    expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
+  });
+
   it("uses the approved dashboard palette", () => {
     expect(dashboardStyles).toContain("#E1BEE7");
     expect(dashboardStyles).toContain("#F3E5F5");

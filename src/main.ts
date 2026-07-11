@@ -5,6 +5,7 @@ import { DashboardStore } from "./dashboard-store";
 import { ObsidianVaultReader, collectLocalSnapshot } from "./data-sources";
 import { DeepSeekClient } from "./deepseek-client";
 import { ObsidianDeepSeekTransport } from "./obsidian-deepseek-transport";
+import { openPluginSettings, type ObsidianSettingsHost } from "./open-plugin-settings";
 import { migrateSettings } from "./settings";
 import { DashboardSettingTab, type SettingsController } from "./settings-tab";
 import type { ActionContext, DashboardSettings } from "./types";
@@ -69,6 +70,10 @@ export default class AiKnowledgeDashboardPlugin extends Plugin
 
   async activateDashboardView(): Promise<void> {
     await activateDashboard(this.app.workspace, DASHBOARD_VIEW_TYPE);
+  }
+
+  openSettings(): void {
+    openPluginSettings(this.app as unknown as ObsidianSettingsHost, this.manifest.id);
   }
 
   async saveSettings(): Promise<void> {

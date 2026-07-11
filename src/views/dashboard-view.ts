@@ -1,4 +1,4 @@
-import { ItemView, Notice, TFolder, WorkspaceLeaf } from "obsidian";
+import { ItemView, TFolder, WorkspaceLeaf } from "obsidian";
 import type { DashboardStore } from "../dashboard-store";
 import type { DashboardSettings, DashboardState, DataSourceSetting } from "../types";
 
@@ -10,6 +10,7 @@ export interface DashboardViewController {
   settings: DashboardSettings;
   store: DashboardStore;
   generateAdvice(includeUserProfile: boolean): Promise<void>;
+  openSettings(): void;
 }
 
 export class DashboardView extends ItemView {
@@ -95,9 +96,7 @@ export class DashboardView extends ItemView {
       cls: "akd-nav-item akd-nav-settings",
       text: "Settings"
     });
-    settings.addEventListener("click", () => new Notice(
-      "Open Settings → Community plugins → AI Knowledge Dashboard."
-    ));
+    settings.addEventListener("click", () => this.controller.openSettings());
   }
 
   private renderDashboard(parent: HTMLElement): void {
