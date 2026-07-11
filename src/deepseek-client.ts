@@ -69,7 +69,69 @@ function parseJson(content: string): unknown {
 }
 
 export class DeepSeekClient {
-  constructor(private readonly transport: DeepSeekTransport) {}
+  constructor(
+    private readonly transport: DeepSeekTransport,
+    private readonly timeoutMs = 60_000
+  ) {}
+
+  private post(input: Parameters<DeepSeekTransport["post"]>[0]): Promise<TransportResponse> {
+    return new Promise<TransportResponse>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("请求超时，请检查网络后重试。")),
+        this.timeoutMs
+      );
+      this.transport.post(input).then(
+        response => {
+          clearTimeout(timeout);
+          resolve(response);
+        },
+        error => {
+          clearTimeout(timeout);
+          reject(error);
+        }
+      );
+    });
+  }
+
+  async testConnection(request: {
+    apiKey: string;
+    model: "deepseek-v4-flash" | "deepseek-v4-pro";
+  }): Promise<void> {
+    const apiKey = request.apiKey.trim();
+    if (!apiKey) {
+      throw new Error("请先在设置中配置 DeepSeek API Key。");
+    }
+    let response: TransportResponse;
+    try {
+      response = await this.post({
+        url: DEEPSEEK_CHAT_URL,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: {
+          model: request.model,
+          messages: [{
+            role: "user",
+            content: "请只返回 JSON：{\"ok\":true}。这是连接测试，不包含任何知识库上下文。"
+          }],
+          response_format: { type: "json_object" },
+          stream: false,
+          max_tokens: 32
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message.split(apiKey).join("[redacted]") : "网络请求失败";
+      throw new Error(`DeepSeek 网络请求失败：${message}`);
+    }
+    if (response.status < 200 || response.status >= 300) {
+      throw errorForStatus(response.status);
+    }
+    const result = parseJson(extractContent(response.json));
+    if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true) {
+      throw new Error("DeepSeek 连接测试返回了无效结果。");
+    }
+  }
 
   async generateActions(request: GenerateActionsRequest): Promise<ActionAdvice[]> {
     const apiKey = request.apiKey.trim();
@@ -97,7 +159,7 @@ export class DeepSeekClient {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       let response: TransportResponse;
       try {
-        response = await this.transport.post(input);
+        response = await this.post(input);
       } catch (error) {
         const message = error instanceof Error ? error.message.split(apiKey).join("[redacted]") : "网络请求失败";
         throw new Error(`DeepSeek 网络请求失败：${message}`);

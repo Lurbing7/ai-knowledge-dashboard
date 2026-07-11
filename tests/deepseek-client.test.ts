@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DeepSeekClient,
   type DeepSeekTransport,
@@ -45,6 +45,45 @@ class QueueTransport implements DeepSeekTransport {
 }
 
 describe("DeepSeekClient", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("fails with a readable error when the request times out", async () => {
+    vi.useFakeTimers();
+    const transport: DeepSeekTransport = {
+      post: () => new Promise<TransportResponse>(() => undefined)
+    };
+    const client = new DeepSeekClient(transport, 1_000);
+
+    const request = client.generateActions({
+      apiKey: "test-secret",
+      model: "deepseek-v4-flash",
+      context
+    });
+    const assertion = expect(request).rejects.toThrow("超时");
+
+    await vi.advanceTimersByTimeAsync(1_000);
+    await assertion;
+  });
+
+  it("tests the connection without sending knowledge context", async () => {
+    const transport = new QueueTransport([{
+      status: 200,
+      json: completion('{"ok":true}')
+    }]);
+    const client = new DeepSeekClient(transport);
+
+    await expect(client.testConnection({
+      apiKey: "test-secret",
+      model: "deepseek-v4-flash"
+    })).resolves.toBeUndefined();
+
+    const body = transport.calls[0].body as { messages: Array<{ content: string }> };
+    expect(JSON.stringify(body)).not.toContain("Projects");
+    expect(JSON.stringify(body)).not.toContain("用户画像");
+  });
+
   it("sends an authenticated JSON Output request", async () => {
     const transport = new QueueTransport([{ status: 200, json: completion(validActionsJson) }]);
     const client = new DeepSeekClient(transport);

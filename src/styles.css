@@ -471,6 +471,58 @@
   color: var(--akd-muted);
 }
 
+.akd-message {
+  margin: 16px 0;
+  padding: 14px 16px;
+  border: 1px solid var(--akd-line);
+  border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.akd-message-error,
+.akd-advice-error {
+  border-color: var(--text-error);
+  color: var(--text-error);
+}
+
+.akd-advice-stale {
+  border-color: var(--color-orange);
+}
+
+.akd-advice-fresh {
+  border-color: var(--interactive-accent);
+}
+
+.akd-ai-controls {
+  margin: 22px 0 16px;
+  padding: 18px;
+  border: 1px solid var(--akd-line);
+  border-radius: 16px;
+  background: var(--background-secondary);
+}
+
+.akd-ai-controls h2 {
+  margin-top: 0;
+}
+
+.akd-profile-consent {
+  display: block;
+  margin: 12px 0;
+  color: var(--akd-muted);
+}
+
+.akd-health-summary {
+  max-height: 60vh;
+  padding: 18px;
+  overflow: auto;
+  white-space: pre-wrap;
+  border: 1px solid var(--akd-line);
+  border-radius: 12px;
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
 @media (max-width: 1280px) {
   .akd-shell {
     grid-template-columns: minmax(160px, 210px) minmax(0, 1fr);

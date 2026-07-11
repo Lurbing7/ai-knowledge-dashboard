@@ -1,6 +1,6 @@
 {
   "name": "ai-knowledge-dashboard",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A personal AI knowledge dashboard plugin for Obsidian.",
   "main": "main.js",
   "scripts": {
