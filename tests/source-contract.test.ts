@@ -97,6 +97,12 @@ describe("final source contract", () => {
     expect(dashboardStyles).toContain("@media (hover: none)");
   });
 
+  it("keeps recent Domain note titles visible at scaled desktop layouts", () => {
+    expect(dashboardStyles).toMatch(/\.akd-recent-note-title\s*\{[^}]*display: block;[^}]*width: 100%;[^}]*max-height: 2\.7em;[^}]*color: var\(--akd-ink\);/s);
+    expect(dashboardStyles).toMatch(/\.akd-recent-note\s*\{[^}]*height: auto;/s);
+    expect(dashboardStyles).not.toContain("display: -webkit-box");
+  });
+
   it("renders the Health summary as Obsidian Markdown and links to its source", () => {
     expect(dashboardViewSource).toContain("MarkdownRenderer");
     expect(dashboardViewSource).toContain("MarkdownRenderer.render");
