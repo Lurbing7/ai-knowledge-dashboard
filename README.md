@@ -1,249 +1,76 @@
 # AI Knowledge Dashboard
 
-An Obsidian plugin that turns a personal AI knowledge base into an actionable dashboard.
+面向个人 Obsidian 知识库的行动仪表盘。它汇总本地知识库状态，并在用户明确点击后调用 DeepSeek，生成最多 3 条可执行的下一步建议。
 
-This project started from my own vault: a Karpathy-inspired AI knowledge base where raw materials, inbox notes, compiled knowledge, projects, and action plans are continuously reorganized by humans and AI agents.
+这个插件的目标不是让知识库“看起来更复杂”，而是帮助用户判断现在应该学习、交付或整理什么。
 
-The dashboard is designed to answer three questions every time Obsidian opens:
+## 核心行为
 
-- What should I do today?
-- Which knowledge or project area needs attention?
-- What can AI help me organize, review, or generate next?
+- Dashboard 使用独立且固定的标签页；只有点击 Ribbon 或执行命令时才创建/显示。
+- 功能导航位于页面顶部：Dashboard 固定在左侧，Settings 固定在右侧，中间功能项在窄窗口中横向滚动，为下方左右分区保留完整宽度。
+- 插件启动时不会抢占当前文章，也不会改变 Obsidian 原生工作区恢复和文件列表替换标签的逻辑。
+- Vault 文件变化只刷新本地统计、Health、AI Task Queue，并把旧建议标为过期；不会自动调用 AI。
+- DeepSeek 只在用户点击“生成下一步行动”后调用，响应被严格限制为 1–3 条行动。
+- API Key 通过 Obsidian `SecretStorage` 保存，不写入插件 `data.json`、日志或仓库。
+- 错误会保留在 Dashboard 内，上一批有效建议不会因一次失败而消失。
 
-## Why This Exists
+## 默认知识库结构
 
-Most knowledge bases are good at storing information, but weak at turning knowledge into action.
+每个数据源都可单独启用和修改路径。路径为空或关闭后，该数据源不会被扫描。
 
-This plugin is an experiment in building a personal knowledge cockpit:
-
-- collect raw material into an inbox
-- organize source notes into a stable learning system
-- compile durable knowledge into a wiki
-- surface knowledge health signals
-- generate practical action guides from current goals
-
-It is not meant to replace Obsidian notes. It is the entry point that helps decide where to go next.
-
-## Vault Model
-
-The plugin now assumes a simple Karpathy-style vault layout by default:
-
-```text
-raw/
-├── inbox/      # captured ideas, AI chats, web clips, drafts
-├── sources/    # source notes and long-term learning material
-└── assets/     # attachments, images, generated media
-
-wiki/           # compiled and structured knowledge pages
-```
-
-Inside `raw/sources`, large areas can use three-digit numeric prefixes:
-
-```text
-raw/sources/
-├── 101-计算机基础
-├── 102-编程语言
-├── 103-框架
-├── 104-数据库
-├── 105-基础服务
-├── 106-各类工具
-├── 201-AI
-├── 301-项目
-├── 701-面试
-├── 801-归档
-└── 901-备忘录
-```
-
-This works better than a flat `01`, `02`, `03` scheme for a growing vault:
-
-- the hundred digit represents a broad category
-- the remaining digits leave room for future subcategories
-- related topics stay visually grouped
-- AI agents can infer the category from the path before reading file content
-
-For this plugin, the important part is that these folders live under the configured Sources folder. The dashboard should not hard-code every numbered folder; it should discover and summarize them over time.
-
-The defaults can be changed in plugin settings.
-
-| Setting | Default | Purpose |
+| 数据源 | 默认路径 | 用途 |
 |---|---|---|
-| Inbox folder | `raw/inbox` | Count and display collected items |
-| Sources folder | `raw/sources` | Count source notes and learning material |
-| Assets folder | `raw/assets` | Exclude attachment storage from note statistics |
-| Wiki folder | `wiki` | Count compiled knowledge pages |
-| Concepts folder | `wiki/concepts` | Count extracted concept pages |
+| Inbox | `inbox` | 临时输入数量 |
+| Domain | `domain` | 可复用知识数量 |
+| Projects | `projects` | 项目数量与 `00-行动看板.md` 摘要 |
+| Wiki | `wiki` | 编译知识数量 |
+| Health | `wiki/HEALTH.md` | 仅提取“结论”“维护信号” |
+| AI Task Queue | `inbox/tasks` | 仅提取 todo/doing 的标题、状态、类型 |
+| Assets | `assets` | 附件数量 |
+| User Profile | `private/用户画像.md` | 默认关闭；仅提取批准的目标、阶段、优先级和 AI 协作偏好 |
 
-Backward compatibility:
+项目默认值适配 `C:\develop\notes` 当前结构，但设置页可用于其他 Vault。
 
-- If `raw/inbox` does not exist, the plugin falls back to `raw/00-inbox`.
-- Personal or private folders should only be shown as status signals. The plugin should not read private details by default.
+## DeepSeek 与隐私边界
 
-## Dashboard Concept
+插件直接请求 DeepSeek Chat Completions API，支持：
 
-The visual direction is inspired by learning-platform dashboards such as Coursue:
+- `deepseek-v4-flash`
+- `deepseek-v4-pro`
 
-- left navigation
-- central focus banner
-- progress cards
-- action guide cards
-- right-side statistics and AI task queue
+发送内容仅由已启用数据源的有界摘要组成，不发送完整笔记、绝对路径、凭据行或配置错误详情。User Profile 默认关闭；即使启用，也只提取白名单字段，并且可在单次生成前取消勾选。
 
-Current layout:
+连接测试只发送通用的 `{"ok":true}` 请求，不携带知识库上下文。网络超时、无效 Key、余额不足、限流、服务异常与无效 JSON 都会显示为可读错误。
 
-- **Dashboard**: overview of today, projects, and knowledge status
-- **Inbox**: collected material waiting to be processed
-- **Action Guide**: converts goals into concrete next steps
-- **Projects**: current project tracks such as AI knowledge base and `bz-lottery`
-- **Knowledge Map**: top-level areas of the vault
-- **Health**: stale notes, overgrown areas, and wiki/index status
-- **Settings**: folder paths and display options
+## 使用方法
 
-Navigation status:
+1. 在 Obsidian 设置中打开 `AI Knowledge Dashboard`。
+2. 在 DeepSeek 区域选择或创建 Secret，并输入 API Key。
+3. 按需调整数据源开关和路径；建议仅在明确需要时启用 User Profile。
+4. 点击左侧 Ribbon 图标或运行 `Open AI Knowledge Dashboard`。
+5. 在 Action Guide 中预览将发送的数据类型，再点击“生成下一步行动”。
 
-- Sidebar buttons switch between internal dashboard pages instead of leaving the UI and opening plain Markdown files.
-- Inbox, Action Guide, Projects, Knowledge Map, and Health all stay inside the dashboard shell.
-- Cards can still open related Markdown notes when the user explicitly clicks an open action.
-- Workflow buttons are still lightweight shortcuts. Long-running AI workflows are intentionally not executed directly by the plugin yet.
+Dashboard 会保持固定，但不会被设为 Obsidian 的默认启动页。
 
-Startup model:
+## 开发与本地安装
 
-- This plugin owns the startup dashboard view through its `Open on startup` setting.
-- If the separate Homepage plugin is installed, its old Markdown homepage startup should be disabled to avoid layout conflicts.
-- The dashboard layout is responsive and should adapt when Obsidian sidebars, Claudian, or file explorers are open.
-
-## Action Guide
-
-Action Guide is the core module.
-
-It turns knowledge into execution:
-
-```text
-Goal -> Current Status -> Next Action -> Why -> Estimate -> Related Notes -> AI Help
-```
-
-Example:
-
-```text
-Goal: 广州东附近求职
-Current Status: 已有 AI 项目、部署经验、知识库沉淀
-Next Action: 把 bz-lottery 改写成 AI 开发经验项目
-Why: 国内招聘正在重视 AI 开发经验
-Estimate: 30-45 分钟
-Related Notes: 简历、bz-lottery、一人公司路线
-AI Help: 生成项目描述、提炼 STAR、检查简历表达
-```
-
-The first version uses static action guide cards. Future versions will read goals, projects, and health reports from the vault.
-
-## Current Status
-
-Implemented:
-
-- TypeScript Obsidian plugin scaffold
-- Dedicated `AI Knowledge Dashboard` view
-- Auto-open dashboard on startup
-- Coursue-inspired dashboard UI
-- Static action guide cards
-- Basic vault statistics through the Obsidian `Vault` API
-- Configurable folder settings for the reorganized vault
-- Local install script for my notes vault
-
-Known limitations:
-
-- Action guide cards are still static.
-- Health report parsing is not implemented yet.
-- Search UI is visual only in the current version.
-- Dashboard navigation buttons are not wired to separate views yet.
-
-## Development
-
-Install dependencies:
-
-```bash
-npm install
-```
-
-Build plugin:
-
-```bash
+```powershell
+npm ci
+npm run check
 npm run build
-```
-
-Install into my local notes vault:
-
-```bash
 npm run install:notes
 ```
 
-This copies runtime files to:
-
-```text
-C:\develop\notes\.obsidian\plugins\ai-knowledge-dashboard\
-```
-
-Required runtime files:
+`npm run build` 会先执行 TypeScript 与 Vitest 检查，再生成 `main.js` 和根目录 `styles.css`。安装脚本只复制以下运行文件到 `C:\develop\notes\.obsidian\plugins\ai-knowledge-dashboard\`，并逐个校验 SHA-256：
 
 - `manifest.json`
 - `main.js`
 - `styles.css`
 
-## Local Testing
+安装脚本不会覆盖插件 `data.json`，API Key 也不在该文件中。
 
-After running:
+## 源码边界
 
-```bash
-npm run install:notes
-```
-
-Open Obsidian and enable:
-
-```text
-Settings -> Community plugins -> AI Knowledge Dashboard
-```
-
-If the dashboard does not open automatically, run the command:
-
-```text
-Open AI Knowledge Dashboard
-```
-
-## Roadmap
-
-### 0.1.x - Reliable Local Dashboard
-
-- Read real Inbox count from `raw/inbox`
-- Read real source note count from `raw/sources`
-- Keep folder paths configurable
-- Keep old `raw/00-inbox` fallback
-- Polish visual layout and install workflow
-
-### 0.2.x - Action Guide System
-
-- Move action guide data into configurable templates
-- Generate action cards from notes or project metadata
-- Link each action to related Obsidian notes
-- Add buttons for opening related notes
-
-### 0.3.x - Knowledge Maintenance
-
-- Parse `wiki/HEALTH.md`
-- Display stale notes and overgrown folders
-- Show wiki compile and search index status
-- Add commands for maintenance workflows
-
-### Future
-
-- Optional AI-generated daily suggestions
-- Local search index integration
-- Daily / weekly report generation
-- More polished responsive dashboard UI
-
-## Repository
-
-GitHub:
-
-```text
-https://github.com/wbz9908/ai-knowledge-dashboard
-```
+`src/` 是唯一源码主体；根目录 `main.js` 与 `styles.css` 是构建产物。旧目录假设、硬编码行动卡、本地进程分析器和启动自动打开设置均已移除。
 
 License: MIT

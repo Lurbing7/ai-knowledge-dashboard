@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.worktrees/
+.superpowers/
 data.json
 .DS_Store
 Thumbs.db
