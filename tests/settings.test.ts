@@ -3,6 +3,8 @@ import { DEFAULT_SETTINGS, migrateSettings, normalizeDataSource } from "../src/s
 
 describe("dashboard settings", () => {
   it("uses the final vault defaults", () => {
+    expect(DEFAULT_SETTINGS.deepseekThinkingEnabled).toBe(true);
+    expect(DEFAULT_SETTINGS.deepseekReasoningEffort).toBe("high");
     expect(DEFAULT_SETTINGS.sources.inbox).toEqual({ enabled: true, path: "inbox" });
     expect(DEFAULT_SETTINGS.sources.domain).toEqual({ enabled: true, path: "domain" });
     expect(DEFAULT_SETTINGS.sources.projects).toEqual({ enabled: true, path: "projects" });
@@ -40,6 +42,8 @@ describe("dashboard settings", () => {
     const migrated = migrateSettings({
       actionLimit: 99,
       deepseekModel: "deepseek-v4-pro",
+      deepseekThinkingEnabled: false,
+      deepseekReasoningEffort: "max",
       deepseekSecretName: "deepseek-personal",
       sources: {
         inbox: { enabled: true, path: " capture\\inbox " },
@@ -49,9 +53,22 @@ describe("dashboard settings", () => {
 
     expect(migrated.actionLimit).toBe(3);
     expect(migrated.deepseekModel).toBe("deepseek-v4-pro");
+    expect(migrated.deepseekThinkingEnabled).toBe(false);
+    expect(migrated.deepseekReasoningEffort).toBe("max");
     expect(migrated.deepseekSecretName).toBe("deepseek-personal");
     expect(migrated.sources.inbox).toEqual({ enabled: true, path: "capture/inbox" });
     expect(migrated.sources.userProfile).toEqual({ enabled: true, path: "private/profile.md" });
+  });
+
+  it("falls back to enabled high reasoning for legacy or invalid settings", () => {
+    expect(migrateSettings({})).toMatchObject({
+      deepseekThinkingEnabled: true,
+      deepseekReasoningEffort: "high"
+    });
+    expect(migrateSettings({ deepseekReasoningEffort: "invalid" })).toMatchObject({
+      deepseekThinkingEnabled: true,
+      deepseekReasoningEffort: "high"
+    });
   });
 
   it("treats an empty path as disabled", () => {

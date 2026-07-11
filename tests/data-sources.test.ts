@@ -11,7 +11,10 @@ import {
 class MemoryVaultReader implements VaultReader {
   readonly reads: string[] = [];
 
-  constructor(private readonly files: Record<string, string>) {}
+  constructor(
+    private readonly files: Record<string, string>,
+    private readonly mtimes: Record<string, number> = {}
+  ) {}
 
   async exists(path: string): Promise<boolean> {
     return path in this.files || Object.keys(this.files).some((file) => file.startsWith(`${path}/`));
@@ -25,7 +28,7 @@ class MemoryVaultReader implements VaultReader {
   async listMarkdown(path: string): Promise<Array<{ path: string; mtime: number }>> {
     return Object.keys(this.files)
       .filter((file) => file.startsWith(`${path}/`) && file.endsWith(".md"))
-      .map((file, index) => ({ path: file, mtime: index + 1 }));
+      .map((file, index) => ({ path: file, mtime: this.mtimes[file] ?? index + 1 }));
   }
 }
 
@@ -117,5 +120,45 @@ describe("bounded data sources", () => {
     expect(snapshot.projectsSummary).toContain("下一步");
     expect(snapshot.issues).toContain("Wiki 路径不存在：missing-wiki");
     expect(reader.reads).not.toContain("private/用户画像.md");
+  });
+
+  it("builds recent notes and evidence-based signals for each area", async () => {
+    const day = 24 * 60 * 60 * 1_000;
+    const now = 20 * day;
+    const files = {
+      "inbox/new.md": "# New",
+      "inbox/middle.md": "# Middle",
+      "inbox/old.md": "# Old",
+      "inbox/oldest.md": "# Oldest",
+      "projects/active-project/current.md": "# Current",
+      "projects/other/previous.md": "# Previous",
+      "domain/it/java.md": "# Java",
+      "wiki/java.md": "# Java Wiki",
+      "wiki/HEALTH.md": "# Health"
+    };
+    const reader = new MemoryVaultReader(files, {
+      "inbox/new.md": now - day,
+      "inbox/middle.md": now - 6 * day,
+      "inbox/old.md": now - 8 * day,
+      "inbox/oldest.md": now - 12 * day,
+      "projects/active-project/current.md": now - day,
+      "projects/other/previous.md": now - 2 * day,
+      "domain/it/java.md": now - day,
+      "wiki/java.md": now - 3 * day,
+      "wiki/HEALTH.md": now - 4 * day
+    });
+
+    const snapshot = await collectLocalSnapshot(reader, structuredClone(DEFAULT_SETTINGS), now);
+
+    expect(snapshot.areas.inbox.recentNotes.map((note) => note.path)).toEqual([
+      "inbox/new.md",
+      "inbox/middle.md",
+      "inbox/old.md"
+    ]);
+    expect(snapshot.areas.inbox.signal).toEqual({ tone: "attention", text: "最近 7 天变化 2 篇" });
+    expect(snapshot.areas.projects.signal.text).toContain("active-project");
+    expect(snapshot.areas.domain.signal.text).toContain("it");
+    expect(snapshot.areas.domain.signal.text).toContain("java");
+    expect(snapshot.areas.wiki.signal).toEqual({ tone: "attention", text: "Domain 有更晚更新" });
   });
 });

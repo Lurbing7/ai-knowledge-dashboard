@@ -108,7 +108,8 @@ var DashboardStore = class {
       contextFingerprint: "",
       advice: getSettings().latestAdvice,
       loading: false,
-      issues: []
+      issues: [],
+      generationError: void 0
     };
   }
   subscribe(listener) {
@@ -162,7 +163,7 @@ var DashboardStore = class {
       generatedAt: Date.now(),
       status: "fresh"
     };
-    this.state = { ...this.state, advice };
+    this.state = { ...this.state, advice, generationError: void 0 };
     this.onAdviceChanged(advice);
     this.notify();
   }
@@ -173,16 +174,21 @@ var DashboardStore = class {
         status: "error",
         errorMessage: message
       };
-      this.state = { ...this.state, advice };
+      this.state = { ...this.state, advice, generationError: void 0 };
       this.onAdviceChanged(advice);
     } else {
-      this.state = { ...this.state, issues: [...this.state.issues, message] };
+      this.state = { ...this.state, generationError: message };
     }
     this.notify();
   }
   clearAdvice() {
-    this.state = { ...this.state, advice: null };
+    this.state = { ...this.state, advice: null, generationError: void 0 };
     this.onAdviceChanged(null);
+    this.notify();
+  }
+  clearGenerationError() {
+    if (!this.state.generationError) return;
+    this.state = { ...this.state, generationError: void 0 };
     this.notify();
   }
   notify() {
@@ -283,15 +289,55 @@ async function readTaskQueueSummary(reader, path) {
   const order = { doing: 0, todo: 1 };
   return tasks.sort((left, right) => order[left.status] - order[right.status] || left.title.localeCompare(right.title, "zh-Hans-CN"));
 }
-async function countSource(reader, setting, label, issues) {
+async function listSource(reader, setting, label, issues) {
   if (!setting.enabled) {
-    return 0;
+    return [];
   }
   if (!await reader.exists(setting.path)) {
     issues.push(`${label} \u8DEF\u5F84\u4E0D\u5B58\u5728\uFF1A${setting.path}`);
-    return 0;
+    return [];
   }
-  return (await reader.listMarkdown(setting.path)).length;
+  return reader.listMarkdown(setting.path);
+}
+function noteTitle(path) {
+  var _a;
+  return ((_a = path.split("/").pop()) == null ? void 0 : _a.replace(/\.md$/i, "")) || "\u672A\u547D\u540D\u7B14\u8BB0";
+}
+function recentNotes(files) {
+  return [...files].sort((left, right) => right.mtime - left.mtime || left.path.localeCompare(right.path)).slice(0, 3).map((file) => ({ ...file, title: noteTitle(file.path) }));
+}
+function emptySignal() {
+  return { tone: "neutral", text: "\u6682\u65E0\u7B14\u8BB0" };
+}
+function topLevel(path, root) {
+  const relative = path.slice(root.length).replace(/^\/+/, "");
+  const parts = relative.split("/");
+  return parts.length > 1 ? parts[0] : noteTitle(path);
+}
+function areaSummary(files, signal) {
+  return { count: files.length, recentNotes: recentNotes(files), signal };
+}
+function buildAreas(files, settings, now) {
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1e3;
+  const inboxChanges = files.inbox.filter((file) => file.mtime >= weekAgo).length;
+  const projectLatest = recentNotes(files.projects)[0];
+  const domainLatest = recentNotes(files.domain)[0];
+  const wikiLatest = recentNotes(files.wiki)[0];
+  return {
+    inbox: areaSummary(files.inbox, files.inbox.length === 0 ? emptySignal() : {
+      tone: inboxChanges > 0 ? "attention" : "neutral",
+      text: `\u6700\u8FD1 7 \u5929\u53D8\u5316 ${inboxChanges} \u7BC7`
+    }),
+    projects: areaSummary(files.projects, projectLatest ? {
+      tone: "neutral",
+      text: `\u6700\u8FD1\u6D3B\u8DC3\uFF1A${topLevel(projectLatest.path, settings.sources.projects.path)}`
+    } : emptySignal()),
+    domain: areaSummary(files.domain, domainLatest ? {
+      tone: "neutral",
+      text: `\u6700\u8FD1\u6C89\u6DC0\uFF1A${topLevel(domainLatest.path, settings.sources.domain.path)} / ${domainLatest.title}`
+    } : emptySignal()),
+    wiki: areaSummary(files.wiki, wikiLatest ? domainLatest && domainLatest.mtime > wikiLatest.mtime ? { tone: "attention", text: "Domain \u6709\u66F4\u665A\u66F4\u65B0" } : { tone: "healthy", text: "Wiki \u5DF2\u8986\u76D6\u6700\u8FD1\u65F6\u95F4\u70B9" } : emptySignal())
+  };
 }
 async function readEnabledFile(reader, setting, label, issues, read) {
   if (!setting.enabled) {
@@ -303,14 +349,21 @@ async function readEnabledFile(reader, setting, label, issues, read) {
   }
   return read(reader, setting.path);
 }
-async function collectLocalSnapshot(reader, settings) {
+async function collectLocalSnapshot(reader, settings, now = Date.now()) {
   const issues = [];
-  const counts = {
-    inbox: await countSource(reader, settings.sources.inbox, "Inbox", issues),
-    domain: await countSource(reader, settings.sources.domain, "Domain", issues),
-    projects: await countSource(reader, settings.sources.projects, "Projects", issues),
-    wiki: await countSource(reader, settings.sources.wiki, "Wiki", issues)
+  const areaFiles = {
+    inbox: await listSource(reader, settings.sources.inbox, "Inbox", issues),
+    domain: await listSource(reader, settings.sources.domain, "Domain", issues),
+    projects: await listSource(reader, settings.sources.projects, "Projects", issues),
+    wiki: await listSource(reader, settings.sources.wiki, "Wiki", issues)
   };
+  const counts = {
+    inbox: areaFiles.inbox.length,
+    domain: areaFiles.domain.length,
+    projects: areaFiles.projects.length,
+    wiki: areaFiles.wiki.length
+  };
+  const areas = buildAreas(areaFiles, settings, now);
   let projectsSummary = "";
   if (settings.sources.projects.enabled && await reader.exists(settings.sources.projects.path)) {
     const actionPath = `${settings.sources.projects.path}/00-\u884C\u52A8\u770B\u677F.md`;
@@ -342,6 +395,7 @@ async function collectLocalSnapshot(reader, settings) {
   );
   return {
     counts,
+    areas,
     projectsSummary,
     healthSummary,
     tasks,
@@ -352,13 +406,15 @@ async function collectLocalSnapshot(reader, settings) {
 
 // src/action-advisor.ts
 var ACTION_ADVISOR_SYSTEM_PROMPT = `\u4F60\u662F\u4E2A\u4EBA\u77E5\u8BC6\u5E93\u7684\u4E0B\u4E00\u6B65\u884C\u52A8\u6559\u7EC3\u3002
-\u53EA\u4F7F\u7528\u7528\u6237\u63D0\u4F9B\u7684 JSON \u4E0A\u4E0B\u6587\uFF0C\u8FD4\u56DE JSON \u5BF9\u8C61\uFF0C\u4E0D\u5F97\u8865\u5145\u4E0A\u4E0B\u6587\u4E4B\u5916\u7684\u4E8B\u5B9E\u3002
+\u53EA\u4F7F\u7528\u7528\u6237\u63D0\u4F9B\u7684 JSON \u4E0A\u4E0B\u6587\uFF0C\u53EA\u8FD4\u56DE\u4E00\u4E2A JSON \u5BF9\u8C61\uFF0C\u4E0D\u4F7F\u7528 Markdown \u4EE3\u7801\u56F4\u680F\uFF0C\u4E0D\u6DFB\u52A0\u89E3\u91CA\u6587\u5B57\uFF0C\u4E0D\u5F97\u8865\u5145\u4E0A\u4E0B\u6587\u4E4B\u5916\u7684\u4E8B\u5B9E\u3002
 actions \u5FC5\u987B\u4E3A 1 \u5230\u6700\u591A 3 \u6761\uFF0C\u6BCF\u6761\u5305\u542B priority\u3001title\u3001reason\u3001sources\u3001estimate\u3001acceptance\u3001mode\u3001aiHelp\u3002
 \u6BCF\u6761 sources \u5FC5\u987B\u662F context.sourceTypes \u7684\u552F\u4E00\u5B50\u96C6\uFF0C\u6700\u591A 5 \u9879\uFF0C\u4E0D\u5F97\u91CD\u590D\u6216\u7F16\u9020\u6765\u6E90\u3002
 priority \u53EA\u5141\u8BB8 P0\u3001P1\u3001P2\uFF0C\u6309 P0\u3001P1\u3001P2 \u6392\u5E8F\uFF1BPaused/Future \u4E0D\u5F97\u751F\u6210\u884C\u52A8\u3002
 Maintenance \u53EA\u6709\u5728\u76F4\u63A5\u963B\u585E\u73B0\u5B9E\u76EE\u6807\u65F6\u624D\u80FD\u5EFA\u8BAE\uFF0C\u4E14\u4E0D\u80FD\u4F5C\u4E3A priority \u503C\u3002
 \u6280\u672F\u5B66\u4E60\u548C\u9762\u8BD5\u8BAD\u7EC3\u4F7F\u7528 learning\uFF08\u5B66\u4E60\u6A21\u5F0F\uFF09\uFF0C\u673A\u68B0\u7EF4\u62A4\u548C\u660E\u786E\u4EA4\u4ED8\u4F7F\u7528 execution\uFF08\u6267\u884C\u6A21\u5F0F\uFF09\u3002
-\u884C\u52A8\u5FC5\u987B\u5177\u4F53\u3001\u53EF\u6267\u884C\u3001\u53EF\u9A8C\u6536\uFF0C\u4E0D\u4EE5\u589E\u52A0\u7B14\u8BB0\u6570\u91CF\u4F5C\u4E3A\u6210\u529F\u6807\u51C6\u3002`;
+\u884C\u52A8\u5FC5\u987B\u5177\u4F53\u3001\u7B80\u6D01\u3001\u53EF\u6267\u884C\u3001\u53EF\u9A8C\u6536\uFF0C\u4E0D\u4EE5\u589E\u52A0\u7B14\u8BB0\u6570\u91CF\u4F5C\u4E3A\u6210\u529F\u6807\u51C6\u3002
+JSON \u8F93\u51FA\u6837\u4F8B\uFF1A
+{"actions":[{"priority":"P0","title":"\u5B8C\u6210\u5F53\u524D\u884C\u52A8","reason":"\u76F4\u63A5\u670D\u52A1\u5F53\u524D\u76EE\u6807","sources":["Projects \u884C\u52A8\u770B\u677F"],"estimate":"30 \u5206\u949F","acceptance":"\u5F62\u6210\u53EF\u9A8C\u8BC1\u7ED3\u679C","mode":"execution","aiHelp":"\u68C0\u67E5\u7ED3\u679C\u5E76\u6307\u51FA\u9057\u6F0F"}]}`;
 var PRIORITIES = ["P0", "P1", "P2"];
 var MODES = ["learning", "execution"];
 var PRIORITY_ORDER = { P0: 0, P1: 1, P2: 2 };
@@ -437,31 +493,52 @@ function errorForStatus(status) {
       return status >= 500 ? new Error("DeepSeek \u670D\u52A1\u6682\u65F6\u4E0D\u53EF\u7528\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002") : new Error(`DeepSeek \u8BF7\u6C42\u5931\u8D25\uFF08HTTP ${status}\uFF09\u3002`);
   }
 }
-function extractContent(value) {
+function extractCompletion(value) {
   if (!value || typeof value !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const choices = value.choices;
   if (!Array.isArray(choices) || choices.length === 0) {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const first = choices[0];
   if (!first || typeof first !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const message = first.message;
   if (!message || typeof message !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const content = message.content;
-  return typeof content === "string" ? content.trim() : "";
+  const finishReason = first.finish_reason;
+  return {
+    content: typeof content === "string" ? content.trim() : "",
+    finishReason: typeof finishReason === "string" ? finishReason : ""
+  };
 }
 function parseJson(content) {
   try {
     return JSON.parse(content);
   } catch (e) {
+    const fenced = content.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced) {
+      try {
+        return JSON.parse(fenced[1]);
+      } catch (e2) {
+      }
+    }
     throw new Error("DeepSeek \u8FD4\u56DE\u7684 JSON \u65E0\u6CD5\u89E3\u6790\uFF0C\u8BF7\u91CD\u8BD5\u3002");
   }
+}
+function generationOptions(request) {
+  if (!request.thinkingEnabled) {
+    return { thinking: { type: "disabled" }, max_tokens: 3200 };
+  }
+  return {
+    thinking: { type: "enabled" },
+    reasoning_effort: request.reasoningEffort,
+    max_tokens: request.reasoningEffort === "max" ? 8e3 : 4800
+  };
 }
 var DeepSeekClient = class {
   constructor(transport, timeoutMs = 6e4) {
@@ -517,7 +594,7 @@ var DeepSeekClient = class {
     if (response.status < 200 || response.status >= 300) {
       throw errorForStatus(response.status);
     }
-    const result = parseJson(extractContent(response.json));
+    const result = parseJson(extractCompletion(response.json).content);
     if (!result || typeof result !== "object" || result.ok !== true) {
       throw new Error("DeepSeek \u8FDE\u63A5\u6D4B\u8BD5\u8FD4\u56DE\u4E86\u65E0\u6548\u7ED3\u679C\u3002");
     }
@@ -541,7 +618,7 @@ var DeepSeekClient = class {
         ],
         response_format: { type: "json_object" },
         stream: false,
-        max_tokens: 1600
+        ...generationOptions(request)
       }
     };
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -555,7 +632,11 @@ var DeepSeekClient = class {
       if (response.status < 200 || response.status >= 300) {
         throw errorForStatus(response.status);
       }
-      const content = extractContent(response.json);
+      const completion = extractCompletion(response.json);
+      if (completion.finishReason === "length") {
+        throw new Error("DeepSeek \u8F93\u51FA\u88AB\u622A\u65AD\uFF0C\u8BF7\u964D\u4F4E\u63A8\u7406\u5F3A\u5EA6\u6216\u91CD\u8BD5\u3002");
+      }
+      const content = completion.content;
       if (content) {
         return parseActionAdvice(parseJson(content), request.context.sourceTypes);
       }
@@ -591,6 +672,8 @@ var source = (path, enabled = true) => ({ enabled, path });
 var DEFAULT_SETTINGS = {
   actionLimit: 3,
   deepseekModel: "deepseek-v4-flash",
+  deepseekThinkingEnabled: true,
+  deepseekReasoningEffort: "high",
   deepseekSecretName: "",
   sources: {
     inbox: source("inbox"),
@@ -646,6 +729,8 @@ function migrateSettings(value) {
   return {
     actionLimit,
     deepseekModel,
+    deepseekThinkingEnabled: typeof candidate.deepseekThinkingEnabled === "boolean" ? candidate.deepseekThinkingEnabled : DEFAULT_SETTINGS.deepseekThinkingEnabled,
+    deepseekReasoningEffort: candidate.deepseekReasoningEffort === "max" ? "max" : "high",
     deepseekSecretName: typeof candidate.deepseekSecretName === "string" ? candidate.deepseekSecretName.trim() : "",
     sources: migrateSources(candidate.sources),
     latestAdvice: isAdviceState(candidate.latestAdvice) ? candidate.latestAdvice : null
@@ -681,6 +766,17 @@ var DashboardSettingTab = class extends import_obsidian2.PluginSettingTab {
       this.controller.settings.deepseekModel = value === "deepseek-v4-pro" ? "deepseek-v4-pro" : "deepseek-v4-flash";
       await this.controller.saveSettings();
     }));
+    new import_obsidian2.Setting(containerEl).setName("Enable DeepSeek Thinking").setDesc("\u5F00\u542F\u540E\u8BA9 DeepSeek \u5148\u63A8\u7406\u518D\u751F\u6210\u884C\u52A8\u5EFA\u8BAE\uFF1B\u54CD\u5E94\u65F6\u95F4\u548C Token \u6D88\u8017\u4F1A\u589E\u52A0\u3002").addToggle((toggle) => toggle.setValue(this.controller.settings.deepseekThinkingEnabled).onChange(async (value) => {
+      this.controller.settings.deepseekThinkingEnabled = value;
+      await this.controller.saveSettings();
+      this.display();
+    }));
+    if (this.controller.settings.deepseekThinkingEnabled) {
+      new import_obsidian2.Setting(containerEl).setName("Thinking effort").setDesc("\u6807\u51C6\u9002\u5408\u65E5\u5E38\u5EFA\u8BAE\uFF1B\u6700\u5F3A\u9002\u5408\u590D\u6742\u89C4\u5212\uFF0C\u5E76\u4F1A\u4F7F\u7528\u66F4\u591A\u65F6\u95F4\u548C Token\u3002").addDropdown((dropdown) => dropdown.addOption("high", "\u6807\u51C6\uFF08high\uFF09").addOption("max", "\u6700\u5F3A\uFF08max\uFF09").setValue(this.controller.settings.deepseekReasoningEffort).onChange(async (value) => {
+        this.controller.settings.deepseekReasoningEffort = value === "max" ? "max" : "high";
+        await this.controller.saveSettings();
+      }));
+    }
     new import_obsidian2.Setting(containerEl).setName("Test DeepSeek connection").setDesc("\u53EA\u6D4B\u8BD5\u5BC6\u94A5\u548C\u6A21\u578B\uFF0C\u4E0D\u53D1\u9001\u77E5\u8BC6\u5E93\u4E0A\u4E0B\u6587\u3002").addButton((button) => button.setButtonText("Test").onClick(async () => {
       button.setDisabled(true).setButtonText("Testing\u2026");
       try {
@@ -729,6 +825,20 @@ var DashboardSettingTab = class extends import_obsidian2.PluginSettingTab {
 // src/views/dashboard-view.ts
 var import_obsidian3 = require("obsidian");
 var DASHBOARD_VIEW_TYPE = "ai-knowledge-dashboard-view";
+var EMPTY_AREA = {
+  count: 0,
+  recentNotes: [],
+  signal: { tone: "neutral", text: "\u6682\u65E0\u7B14\u8BB0" }
+};
+function formatRelativeTime(mtime, now = Date.now()) {
+  const seconds = Math.max(0, Math.floor((now - mtime) / 1e3));
+  if (seconds < 60) return "\u521A\u521A";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} \u5206\u949F\u524D`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} \u5C0F\u65F6\u524D`;
+  return `${Math.floor(hours / 24)} \u5929\u524D`;
+}
 var DashboardView = class extends import_obsidian3.ItemView {
   constructor(leaf, controller) {
     super(leaf);
@@ -737,6 +847,8 @@ var DashboardView = class extends import_obsidian3.ItemView {
     this.unsubscribe = null;
     this.includeUserProfile = true;
     this.generating = false;
+    this.generationStartedAt = 0;
+    this.generationTimer = null;
     this.state = controller.store.state;
   }
   getViewType() {
@@ -757,6 +869,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
   }
   async onClose() {
     var _a;
+    this.stopGenerationTimer();
     (_a = this.unsubscribe) == null ? void 0 : _a.call(this);
     this.unsubscribe = null;
   }
@@ -771,6 +884,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
     if (this.activePage === "inbox") this.renderFilePage(main, "Inbox", this.controller.settings.sources.inbox);
     if (this.activePage === "projects") this.renderFilePage(main, "Projects", this.controller.settings.sources.projects);
     if (this.activePage === "knowledge") this.renderKnowledge(main);
+    if (this.activePage === "wiki") this.renderFilePage(main, "Wiki", this.controller.settings.sources.wiki);
     if (this.activePage === "health") this.renderHealth(main);
     if (this.activePage === "tasks") this.renderTasks(main);
   }
@@ -797,6 +911,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
       ["inbox", "Inbox"],
       ["projects", "Projects"],
       ["knowledge", "Knowledge Map"],
+      ["wiki", "Wiki"],
       ["health", "Health"],
       ["tasks", "Action Guide"]
     ];
@@ -810,17 +925,17 @@ var DashboardView = class extends import_obsidian3.ItemView {
     settings.addEventListener("click", () => this.controller.openSettings());
   }
   renderDashboard(parent) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f, _g;
     const header = parent.createDiv({ cls: "akd-hero" });
     header.createEl("span", { text: "NEXT ACTIONS" });
     header.createEl("h1", { text: "AI Knowledge Dashboard" });
     header.createEl("p", { text: "\u672C\u5730\u72B6\u6001\u7531 Vault \u4E8B\u4EF6\u5237\u65B0\uFF1B\u53EA\u6709\u4F60\u70B9\u51FB\u540E\u624D\u8C03\u7528 DeepSeek\u3002" });
-    const counts = (_b = (_a = this.state.snapshot) == null ? void 0 : _a.counts) != null ? _b : { inbox: 0, domain: 0, projects: 0, wiki: 0 };
+    const areas = (_a = this.state.snapshot) == null ? void 0 : _a.areas;
     const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderStat(stats, counts.inbox, "Inbox");
-    this.renderStat(stats, counts.domain, "Domain");
-    this.renderStat(stats, counts.projects, "Projects");
-    this.renderStat(stats, counts.wiki, "Wiki");
+    this.renderAreaCard(stats, (_b = areas == null ? void 0 : areas.inbox) != null ? _b : EMPTY_AREA, "Inbox", "inbox");
+    this.renderAreaCard(stats, (_c = areas == null ? void 0 : areas.domain) != null ? _c : EMPTY_AREA, "Domain", "knowledge");
+    this.renderAreaCard(stats, (_d = areas == null ? void 0 : areas.projects) != null ? _d : EMPTY_AREA, "Projects", "projects");
+    this.renderAreaCard(stats, (_e = areas == null ? void 0 : areas.wiki) != null ? _e : EMPTY_AREA, "Wiki", "wiki");
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
       issues.createEl("strong", { text: "Configuration or refresh issue" });
@@ -829,7 +944,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
     }
     const controls = parent.createDiv({ cls: "akd-ai-controls" });
     controls.createEl("h2", { text: "\u4E0B\u4E00\u6B65\u884C\u52A8\u5EFA\u8BAE" });
-    const sources = (_d = (_c = this.state.context) == null ? void 0 : _c.sourceTypes) != null ? _d : [];
+    const sources = (_g = (_f = this.state.context) == null ? void 0 : _f.sourceTypes) != null ? _g : [];
     controls.createEl("p", { text: `\u672C\u6B21\u6570\u636E\u7C7B\u578B\uFF1A${sources.join("\u3001") || "\u5C1A\u65E0\u53EF\u7528\u6570\u636E"}` });
     const hasProfile = sources.includes("\u7528\u6237\u753B\u50CF\u4F18\u5148\u7EA7");
     if (hasProfile) {
@@ -842,28 +957,50 @@ var DashboardView = class extends import_obsidian3.ItemView {
       label.appendText(" \u672C\u6B21\u5305\u542B\u7ECF\u8FC7\u7B5B\u9009\u7684\u7528\u6237\u753B\u50CF\u4F18\u5148\u7EA7");
     }
     const button = controls.createEl("button", {
-      text: this.generating ? "Generating\u2026" : "\u751F\u6210\u4E0B\u4E00\u6B65\u884C\u52A8"
+      text: this.generating ? "\u751F\u6210\u4E2D" : "\u751F\u6210\u4E0B\u4E00\u6B65\u884C\u52A8"
     });
     button.disabled = this.generating || !this.state.context;
-    button.addEventListener("click", () => void this.generate(button));
+    button.addEventListener("click", () => void this.generate());
+    this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
   }
-  async generate(button) {
+  async generate() {
     if (this.generating) return;
     this.generating = true;
-    button.disabled = true;
-    button.setText("Generating\u2026");
+    this.generationStartedAt = Date.now();
+    this.controller.store.clearGenerationError();
+    this.render();
+    this.generationTimer = setInterval(() => this.render(), 1e3);
     try {
       await this.controller.generateAdvice(this.includeUserProfile);
     } finally {
       this.generating = false;
+      this.stopGenerationTimer();
       this.render();
     }
+  }
+  stopGenerationTimer() {
+    if (this.generationTimer) clearInterval(this.generationTimer);
+    this.generationTimer = null;
+  }
+  renderGenerationStatus(parent) {
+    if (!this.generating) return;
+    const status = parent.createDiv({ cls: "akd-generation-status", attr: { "aria-live": "polite" } });
+    status.createSpan({ cls: "akd-spinner", attr: { "aria-hidden": "true" } });
+    status.createSpan({
+      text: this.controller.settings.deepseekThinkingEnabled ? "DeepSeek \u6B63\u5728\u601D\u8003\u5E76\u751F\u6210\u884C\u52A8\u5EFA\u8BAE\u2026" : "DeepSeek \u6B63\u5728\u751F\u6210\u884C\u52A8\u5EFA\u8BAE\u2026"
+    });
+    const elapsed = Math.max(0, Math.floor((Date.now() - this.generationStartedAt) / 1e3));
+    status.createEl("small", { text: `\u5DF2\u7B49\u5F85 ${elapsed} \u79D2` });
   }
   renderAdvice(parent) {
     var _a;
     const advice = this.state.advice;
     if (!advice) {
+      if (this.state.generationError) {
+        parent.createDiv({ cls: "akd-message akd-advice-error", text: this.state.generationError });
+        return;
+      }
       parent.createDiv({ cls: "akd-message", text: "\u5C1A\u672A\u751F\u6210\u884C\u52A8\u5EFA\u8BAE\u3002" });
       return;
     }
@@ -941,6 +1078,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
       card.createEl("h3", { text: task.title });
     });
     if (tasks.length === 0) grid.createDiv({ cls: "akd-message", text: "\u5F53\u524D\u6CA1\u6709 todo / doing AI \u7EF4\u62A4\u4EFB\u52A1\u3002" });
+    this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
   }
   renderPageHeader(parent, title, description) {
@@ -949,10 +1087,32 @@ var DashboardView = class extends import_obsidian3.ItemView {
     header.createEl("h1", { text: title });
     header.createEl("p", { text: description });
   }
-  renderStat(parent, value, label) {
-    const card = parent.createDiv({ cls: "akd-progress-card" });
-    card.createEl("strong", { text: String(value) });
-    card.createEl("span", { text: label });
+  renderAreaCard(parent, area, label, page) {
+    const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
+    const heading = card.createDiv({ cls: "akd-area-heading" });
+    heading.createEl("span", { text: label });
+    heading.createEl("strong", { text: String(area.count) });
+    card.createDiv({
+      cls: `akd-area-signal is-${area.signal.tone}`,
+      text: area.signal.text
+    });
+    const notes = card.createDiv({ cls: "akd-recent-notes" });
+    area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
+    if (area.recentNotes.length === 0) notes.createEl("small", { text: "\u6682\u65E0\u6700\u8FD1\u7B14\u8BB0" });
+    const all = card.createEl("button", { cls: "akd-area-link", text: "\u67E5\u770B\u5168\u90E8" });
+    all.addEventListener("click", () => {
+      this.activePage = page;
+      this.render();
+    });
+  }
+  renderRecentNote(parent, note) {
+    const button = parent.createEl("button", { cls: "akd-recent-note" });
+    button.createSpan({ text: note.title });
+    button.createEl("small", { text: formatRelativeTime(note.mtime) });
+    button.addEventListener("click", () => {
+      const file = this.app.vault.getFileByPath(note.path);
+      if (file) void this.openFile(file);
+    });
   }
   async openFile(file) {
     const leaf = this.app.workspace.getLeaf("tab");
@@ -1042,6 +1202,8 @@ var AiKnowledgeDashboardPlugin = class extends import_obsidian4.Plugin {
       const actions = await this.deepseekClient.generateActions({
         apiKey: this.getDeepSeekApiKey(),
         model: this.settings.deepseekModel,
+        thinkingEnabled: this.settings.deepseekThinkingEnabled,
+        reasoningEffort: this.settings.deepseekReasoningEffort,
         context
       });
       this.store.acceptAdvice(actions, stableFingerprint(this.store.state.context));

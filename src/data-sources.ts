@@ -1,5 +1,8 @@
 import type { App } from "obsidian";
 import type {
+  AreaSignal,
+  AreaSummaries,
+  AreaSummary,
   DashboardSettings,
   DataSourceSetting,
   LocalSnapshot,
@@ -124,20 +127,79 @@ export async function readTaskQueueSummary(reader: VaultReader, path: string): P
     || left.title.localeCompare(right.title, "zh-Hans-CN"));
 }
 
-async function countSource(
+type ListedNote = { path: string; mtime: number };
+
+async function listSource(
   reader: VaultReader,
   setting: DataSourceSetting,
   label: string,
   issues: string[]
-): Promise<number> {
+): Promise<ListedNote[]> {
   if (!setting.enabled) {
-    return 0;
+    return [];
   }
   if (!await reader.exists(setting.path)) {
     issues.push(`${label} 路径不存在：${setting.path}`);
-    return 0;
+    return [];
   }
-  return (await reader.listMarkdown(setting.path)).length;
+  return reader.listMarkdown(setting.path);
+}
+
+function noteTitle(path: string): string {
+  return path.split("/").pop()?.replace(/\.md$/i, "") || "未命名笔记";
+}
+
+function recentNotes(files: ListedNote[]): AreaSummary["recentNotes"] {
+  return [...files]
+    .sort((left, right) => right.mtime - left.mtime || left.path.localeCompare(right.path))
+    .slice(0, 3)
+    .map((file) => ({ ...file, title: noteTitle(file.path) }));
+}
+
+function emptySignal(): AreaSignal {
+  return { tone: "neutral", text: "暂无笔记" };
+}
+
+function topLevel(path: string, root: string): string {
+  const relative = path.slice(root.length).replace(/^\/+/, "");
+  const parts = relative.split("/");
+  return parts.length > 1 ? parts[0] : noteTitle(path);
+}
+
+function areaSummary(files: ListedNote[], signal: AreaSignal): AreaSummary {
+  return { count: files.length, recentNotes: recentNotes(files), signal };
+}
+
+function buildAreas(
+  files: Record<keyof AreaSummaries, ListedNote[]>,
+  settings: DashboardSettings,
+  now: number
+): AreaSummaries {
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1_000;
+  const inboxChanges = files.inbox.filter((file) => file.mtime >= weekAgo).length;
+  const projectLatest = recentNotes(files.projects)[0];
+  const domainLatest = recentNotes(files.domain)[0];
+  const wikiLatest = recentNotes(files.wiki)[0];
+
+  return {
+    inbox: areaSummary(files.inbox, files.inbox.length === 0 ? emptySignal() : {
+      tone: inboxChanges > 0 ? "attention" : "neutral",
+      text: `最近 7 天变化 ${inboxChanges} 篇`
+    }),
+    projects: areaSummary(files.projects, projectLatest ? {
+      tone: "neutral",
+      text: `最近活跃：${topLevel(projectLatest.path, settings.sources.projects.path)}`
+    } : emptySignal()),
+    domain: areaSummary(files.domain, domainLatest ? {
+      tone: "neutral",
+      text: `最近沉淀：${topLevel(domainLatest.path, settings.sources.domain.path)} / ${domainLatest.title}`
+    } : emptySignal()),
+    wiki: areaSummary(files.wiki, wikiLatest ? (
+      domainLatest && domainLatest.mtime > wikiLatest.mtime
+        ? { tone: "attention", text: "Domain 有更晚更新" }
+        : { tone: "healthy", text: "Wiki 已覆盖最近时间点" }
+    ) : emptySignal())
+  };
 }
 
 async function readEnabledFile(
@@ -159,15 +221,23 @@ async function readEnabledFile(
 
 export async function collectLocalSnapshot(
   reader: VaultReader,
-  settings: DashboardSettings
+  settings: DashboardSettings,
+  now = Date.now()
 ): Promise<LocalSnapshot> {
   const issues: string[] = [];
-  const counts = {
-    inbox: await countSource(reader, settings.sources.inbox, "Inbox", issues),
-    domain: await countSource(reader, settings.sources.domain, "Domain", issues),
-    projects: await countSource(reader, settings.sources.projects, "Projects", issues),
-    wiki: await countSource(reader, settings.sources.wiki, "Wiki", issues)
+  const areaFiles = {
+    inbox: await listSource(reader, settings.sources.inbox, "Inbox", issues),
+    domain: await listSource(reader, settings.sources.domain, "Domain", issues),
+    projects: await listSource(reader, settings.sources.projects, "Projects", issues),
+    wiki: await listSource(reader, settings.sources.wiki, "Wiki", issues)
   };
+  const counts = {
+    inbox: areaFiles.inbox.length,
+    domain: areaFiles.domain.length,
+    projects: areaFiles.projects.length,
+    wiki: areaFiles.wiki.length
+  };
+  const areas = buildAreas(areaFiles, settings, now);
 
   let projectsSummary = "";
   if (settings.sources.projects.enabled && await reader.exists(settings.sources.projects.path)) {
@@ -204,6 +274,7 @@ export async function collectLocalSnapshot(
 
   return {
     counts,
+    areas,
     projectsSummary,
     healthSummary,
     tasks,

@@ -34,7 +34,8 @@ export class DashboardStore {
       contextFingerprint: "",
       advice: getSettings().latestAdvice,
       loading: false,
-      issues: []
+      issues: [],
+      generationError: undefined
     };
   }
 
@@ -92,7 +93,7 @@ export class DashboardStore {
       generatedAt: Date.now(),
       status: "fresh"
     };
-    this.state = { ...this.state, advice };
+    this.state = { ...this.state, advice, generationError: undefined };
     this.onAdviceChanged(advice);
     this.notify();
   }
@@ -104,17 +105,23 @@ export class DashboardStore {
         status: "error",
         errorMessage: message
       };
-      this.state = { ...this.state, advice };
+      this.state = { ...this.state, advice, generationError: undefined };
       this.onAdviceChanged(advice);
     } else {
-      this.state = { ...this.state, issues: [...this.state.issues, message] };
+      this.state = { ...this.state, generationError: message };
     }
     this.notify();
   }
 
   clearAdvice(): void {
-    this.state = { ...this.state, advice: null };
+    this.state = { ...this.state, advice: null, generationError: undefined };
     this.onAdviceChanged(null);
+    this.notify();
+  }
+
+  clearGenerationError(): void {
+    if (!this.state.generationError) return;
+    this.state = { ...this.state, generationError: undefined };
     this.notify();
   }
 

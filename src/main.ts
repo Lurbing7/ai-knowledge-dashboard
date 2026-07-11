@@ -108,6 +108,8 @@ export default class AiKnowledgeDashboardPlugin extends Plugin
       const actions = await this.deepseekClient.generateActions({
         apiKey: this.getDeepSeekApiKey(),
         model: this.settings.deepseekModel,
+        thinkingEnabled: this.settings.deepseekThinkingEnabled,
+        reasoningEffort: this.settings.deepseekReasoningEffort,
         context
       });
       this.store.acceptAdvice(actions, stableFingerprint(this.store.state.context));
