@@ -103,12 +103,12 @@ export class DashboardView extends ItemView {
     renderPageButton(navigation, "dashboard", "Dashboard", "akd-nav-home");
     const scroll = navigation.createDiv({ cls: "akd-nav-scroll" });
     const pages: Array<[DashboardPage, string]> = [
-      ["inbox", "Inbox"],
+      ["tasks", "Action Guide"],
       ["projects", "Projects"],
+      ["inbox", "Inbox"],
       ["knowledge", "Knowledge Map"],
       ["wiki", "Wiki"],
-      ["health", "Health"],
-      ["tasks", "Action Guide"]
+      ["health", "Health"]
     ];
     pages.forEach(([page, label]) => {
       renderPageButton(scroll, page, label);
@@ -121,18 +121,6 @@ export class DashboardView extends ItemView {
   }
 
   private renderDashboard(parent: HTMLElement): void {
-    const header = parent.createDiv({ cls: "akd-hero" });
-    header.createEl("span", { text: "NEXT ACTIONS" });
-    header.createEl("h1", { text: "AI Knowledge Dashboard" });
-    header.createEl("p", { text: "本地状态由 Vault 事件刷新；只有你点击后才调用 DeepSeek。" });
-
-    const areas = this.state.snapshot?.areas;
-    const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderAreaCard(stats, areas?.inbox ?? EMPTY_AREA, "Inbox", "inbox");
-    this.renderAreaCard(stats, areas?.domain ?? EMPTY_AREA, "Domain", "knowledge");
-    this.renderAreaCard(stats, areas?.projects ?? EMPTY_AREA, "Projects", "projects");
-    this.renderAreaCard(stats, areas?.wiki ?? EMPTY_AREA, "Wiki", "wiki");
-
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
       issues.createEl("strong", { text: "Configuration or refresh issue" });
@@ -160,6 +148,17 @@ export class DashboardView extends ItemView {
 
     this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
+
+    const overview = parent.createDiv({ cls: "akd-overview-header" });
+    overview.createEl("h2", { text: "知识领域概览" });
+    overview.createEl("p", { text: "最近变化与当前规模" });
+
+    const areas = this.state.snapshot?.areas;
+    const stats = parent.createDiv({ cls: "akd-progress-cards" });
+    this.renderAreaCard(stats, areas?.inbox ?? EMPTY_AREA, "Inbox", "inbox");
+    this.renderAreaCard(stats, areas?.domain ?? EMPTY_AREA, "Domain", "knowledge");
+    this.renderAreaCard(stats, areas?.projects ?? EMPTY_AREA, "Projects", "projects");
+    this.renderAreaCard(stats, areas?.wiki ?? EMPTY_AREA, "Wiki", "wiki");
   }
 
   private async generate(): Promise<void> {

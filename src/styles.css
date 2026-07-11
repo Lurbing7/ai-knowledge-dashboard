@@ -110,44 +110,22 @@
   font-weight: 700;
 }
 
-.akd-hero {
-  min-height: 214px;
-  border-radius: 24px;
-  padding: 28px;
-  background:
-    radial-gradient(circle at 74% 48%, color-mix(in srgb, var(--background-primary) 45%, transparent) 0 2px, transparent 3px 110px),
-    linear-gradient(135deg, var(--akd-accent), var(--akd-accent-bright));
-  color: #173B39;
+.akd-overview-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 28px;
 }
 
-.akd-hero span {
-  display: block;
-  margin-bottom: 16px;
-  letter-spacing: 0.18em;
+.akd-overview-header h2,
+.akd-overview-header p {
+  margin: 0;
+}
+
+.akd-overview-header p {
+  color: var(--akd-muted);
   font-size: 12px;
-  font-weight: 800;
-}
-
-.akd-hero h1 {
-  max-width: 620px;
-  margin: 0 0 10px;
-  color: #173B39;
-  font-size: clamp(28px, 3vw, 34px);
-  line-height: 1.12;
-}
-
-.akd-hero p {
-  margin: 0 0 22px;
-  color: color-mix(in srgb, #173B39 78%, transparent);
-}
-
-.akd-hero button {
-  border: 0;
-  border-radius: 24px;
-  padding: 12px 22px;
-  background: color-mix(in srgb, #173B39 88%, var(--background-primary));
-  color: var(--background-primary);
-  font-weight: 800;
 }
 
 .akd-progress-cards {
@@ -634,14 +612,6 @@
 .theme-dark .akd-view {
   --akd-accent-soft: color-mix(in srgb, #8AE7DC 12%, transparent);
   --akd-shadow: 0 18px 50px rgba(0, 0, 0, 0.28);
-}
-
-.theme-dark .akd-hero {
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--akd-accent) 58%, var(--background-primary)),
-    color-mix(in srgb, var(--akd-accent-bright) 38%, var(--background-primary))
-  );
 }
 
 @media (max-width: 1280px) {

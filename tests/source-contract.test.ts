@@ -54,6 +54,21 @@ describe("final source contract", () => {
     expect(dashboardViewSource).not.toContain("Knowledge OS");
   });
 
+  it("keeps action guidance first and removes the decorative dashboard hero", () => {
+    const actionGuide = dashboardViewSource.indexOf('["tasks", "Action Guide"]');
+    const projects = dashboardViewSource.indexOf('["projects", "Projects"]');
+    const inbox = dashboardViewSource.indexOf('["inbox", "Inbox"]');
+    const actionControls = dashboardViewSource.indexOf('cls: "akd-ai-controls"');
+    const areaCards = dashboardViewSource.indexOf('cls: "akd-progress-cards"');
+
+    expect(actionGuide).toBeGreaterThan(-1);
+    expect(actionGuide).toBeLessThan(projects);
+    expect(projects).toBeLessThan(inbox);
+    expect(actionControls).toBeLessThan(areaCards);
+    expect(dashboardViewSource).not.toContain("akd-hero");
+    expect(dashboardStyles).not.toContain(".akd-hero");
+  });
+
   it("opens plugin settings instead of showing an instruction notice", () => {
     expect(dashboardViewSource).toContain("controller.openSettings");
     expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
