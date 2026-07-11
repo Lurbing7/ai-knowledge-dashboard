@@ -84,6 +84,19 @@ describe("final source contract", () => {
     expect(dashboardViewSource).toContain('cls: "akd-recent-note-title"');
   });
 
+  it("uses an overlay Domain rail without sticky mouse focus", () => {
+    expect(dashboardStyles).toContain("grid-template-columns: 54px minmax(0, 1fr)");
+    expect(dashboardStyles).toContain("width: 54px");
+    expect(dashboardStyles).toContain("width: 210px");
+    expect(dashboardStyles).toContain("position: absolute");
+    expect(dashboardStyles).toContain(":has(.akd-domain-button:focus-visible)");
+    expect(dashboardStyles).not.toContain(".akd-domain-rail:focus-within");
+    expect(dashboardStyles).toContain("transition: width 160ms");
+    expect(dashboardStyles).toContain("max-width: 980px");
+    expect(dashboardStyles).toContain("@container (max-width: 679px)");
+    expect(dashboardStyles).toContain("@media (hover: none)");
+  });
+
   it("renders the Health summary as Obsidian Markdown and links to its source", () => {
     expect(dashboardViewSource).toContain("MarkdownRenderer");
     expect(dashboardViewSource).toContain("MarkdownRenderer.render");

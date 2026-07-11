@@ -504,7 +504,7 @@ git commit -m "feat: 用聚焦领域浏览器替换首页概览"
 - 修改：`src/styles.css`
 - 修改：`tests/source-contract.test.ts`
 
-- [ ] **步骤 1：为精确尺寸、防粘住和响应式写失败契约**
+- [x] **步骤 1：为精确尺寸、防粘住和响应式写失败契约**
 
 在 `tests/source-contract.test.ts` 增加：
 
@@ -523,7 +523,7 @@ it("uses an overlay Domain rail without sticky mouse focus", () => {
 });
 ```
 
-- [ ] **步骤 2：运行契约确认样式缺失**
+- [x] **步骤 2：运行契约确认样式缺失**
 
 运行：
 
@@ -533,7 +533,7 @@ npm test -- --run tests/source-contract.test.ts
 
 预期：FAIL，缺少 54px/210px overlay rail 和 679px container 规则。
 
-- [ ] **步骤 3：替换旧领域卡片样式**
+- [x] **步骤 3：替换旧领域卡片样式**
 
 删除 `.akd-progress-cards`、`.akd-progress-card`、`.akd-area-*` 规则，新增核心布局：
 
@@ -571,7 +571,7 @@ npm test -- --run tests/source-contract.test.ts
 
 按钮清除 Obsidian 默认 `appearance`、边框、阴影和最小尺寸。选中按钮使用 `aria-pressed="true"` 对应类或属性样式。
 
-- [ ] **步骤 4：增加窄容器与无 hover 降级**
+- [x] **步骤 4：增加窄容器与无 hover 降级**
 
 ```css
 .akd-domain-tabs { display: none; }
@@ -595,7 +595,7 @@ npm test -- --run tests/source-contract.test.ts
 
 最近笔记标题保留两行 clamp，时间在窄容器下换到下一行；大屏不增加笔记数量。
 
-- [ ] **步骤 5：增加 Knowledge Map 聚焦样式**
+- [x] **步骤 5：增加 Knowledge Map 聚焦样式**
 
 ```css
 .akd-map-card.is-focused-domain {
@@ -604,7 +604,7 @@ npm test -- --run tests/source-contract.test.ts
 }
 ```
 
-- [ ] **步骤 6：运行契约与完整检查**
+- [x] **步骤 6：运行契约与完整检查**
 
 运行：
 
@@ -616,7 +616,7 @@ git diff --check
 
 预期：源码契约和全部测试 PASS，`git diff --check` 无错误。
 
-- [ ] **步骤 7：提交响应式交互样式**
+- [x] **步骤 7：提交响应式交互样式**
 
 ```bash
 git add src/styles.css tests/source-contract.test.ts
