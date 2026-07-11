@@ -14,13 +14,14 @@
 本轮包含：
 
 - 提高 DeepSeek JSON 输出成功率，并区分输出截断、格式错误和字段校验错误。
+- 在 Settings 中提供 DeepSeek Thinking 开关和 `high`、`max` 推理强度。
 - 添加生成中的旋转指示器、状态文字和已等待时间。
 - 将四个领域概览卡片升级为“数量 + 最近 3 篇 + 一条基于本地事实的关注信号”。
 - 保持现有顶部导航、独立标签页打开笔记、SecretStorage 和用户画像授权逻辑不变。
 
 本轮不包含：
 
-- 流式展示模型思考过程。
+- 流式展示或保存模型内部推理正文。
 - 自动二次调用 DeepSeek 修复错误输出。
 - 读取 Inbox 正文后让 AI 自动判断重要性。
 - 在首页展示完整文件列表或直接编辑、移动、删除笔记。
@@ -34,8 +35,8 @@
 
 - 在 system prompt 中加入一份完整、最小的 JSON 输出样例，字段与 `ActionAdvice` 完全一致。
 - 明确要求只返回一个 JSON 对象，不使用 Markdown 代码围栏，不添加解释文字。
-- 设置 `thinking: { type: "disabled" }`。该任务是短结构化转换，不需要展示或消耗长推理过程。
-- 将 `max_tokens` 从 1600 调整到 3200，并要求每个文本字段简洁，降低三条行动建议被截断的概率。
+- 根据 Settings 发送 `thinking: { type: "enabled" | "disabled" }`；启用时同时发送用户选择的 `reasoning_effort`。
+- 根据 Thinking 配置设置输出预算：关闭为 3200、`high` 为 4800、`max` 为 8000，并要求每个最终文本字段简洁，降低推理过程挤占最终 JSON 或三条行动建议被截断的概率。
 
 ### 响应解析
 
@@ -54,6 +55,22 @@
 
 错误信息只包含失败类别，不保存或展示模型原始输出，也不包含 API Key、用户画像或知识库内容。
 
+`reasoning_content` 不参与 JSON 解析，也不写入设置、缓存或界面。插件只解析 `message.content` 中的最终 JSON。
+
+## Thinking 设置
+
+`DashboardSettings` 新增：
+
+- `deepseekThinkingEnabled: boolean`，默认 `true`。
+- `deepseekReasoningEffort: "high" | "max"`，默认 `high`。
+
+Settings 中在模型选择之后显示“启用 Thinking”开关。开关关闭时隐藏推理强度；开启时显示下拉框：
+
+- `标准（high）`：日常行动建议默认值，兼顾速度、成本和分析能力。
+- `最强（max）`：复杂规划时手动选择，明确提示耗时和 Token 消耗会增加。
+
+关闭 Thinking 时仍保留上一次推理强度值，重新开启后恢复，不要求用户重复选择。旧版设置迁移后使用“开启 + high”，与用户期望一致。连接测试仍只验证密钥和模型，不发送知识库上下文，也不需要启用 Thinking。
+
 ## 生成中反馈
 
 `DashboardView` 保留本地生成状态，但点击后立即重新渲染，使状态不依赖原按钮节点是否仍存在。
@@ -61,11 +78,11 @@
 生成期间，在行动建议区域上方显示紧凑状态条：
 
 - 薄荷绿旋转指示器。
-- “DeepSeek 正在生成行动建议…”文字。
+- Thinking 开启时显示“DeepSeek 正在思考并生成行动建议…”，关闭时显示“DeepSeek 正在生成行动建议…”。
 - 从 0 秒开始递增的等待时间。
 - 生成按钮保持禁用并显示“生成中”。
 
-状态条不伪造“正在分析用户画像”“正在检查项目”等无法从非流式 API 证实的阶段。请求成功或失败后停止计时器并移除状态条。切换 Dashboard 内部页面不会发起重复请求；回到 Dashboard 或 Action Guide 时仍能看到进行中状态。
+状态条不展示内部推理文本，也不伪造“正在分析用户画像”“正在检查项目”等无法从非流式 API 证实的阶段。请求成功或失败后停止计时器并移除状态条。切换 Dashboard 内部页面不会发起重复请求；回到 Dashboard 或 Action Guide 时仍能看到进行中状态。
 
 CSS 动画遵守 `prefers-reduced-motion: reduce`：关闭旋转，只保留静态指示器和文字。
 
@@ -115,7 +132,9 @@ CSS 动画遵守 `prefers-reduced-motion: reduce`：关闭旋转，只保留静�
 
 ### DeepSeek 客户端
 
-- 请求包含完整 JSON 样例、关闭 thinking、`max_tokens: 3200`。
+- 默认请求开启 Thinking、使用 `reasoning_effort: high` 和 `max_tokens: 4800`。
+- Thinking 关闭时发送 disabled、不发送 reasoning effort，并使用 `max_tokens: 3200`。
+- `max` 强度请求使用 `reasoning_effort: max` 和 `max_tokens: 8000`。
 - 合法 JSON 直接解析。
 - 单一 JSON 代码围栏能够解析。
 - `finish_reason: length` 返回截断错误。
@@ -132,7 +151,9 @@ CSS 动画遵守 `prefers-reduced-motion: reduce`：关闭旋转，只保留静�
 
 ### UI 契约
 
+- Settings 能切换 Thinking；强度选项仅在开启时显示，旧设置迁移为“开启 + high”。
 - 点击生成后立即出现加载状态，结束后清理计时器。
+- 加载文字准确反映当前 Thinking 是否开启，但不展示内部推理内容。
 - 加载期间不能重复提交。
 - 首页卡片包含数量、信号、最近笔记和“查看全部”。
 - 打开笔记继续使用新标签页。
@@ -141,7 +162,8 @@ CSS 动画遵守 `prefers-reduced-motion: reduce`：关闭旋转，只保留静�
 ## 验收标准
 
 - 使用 DeepSeek JSON Output 时，完整合法响应能够通过；代码围栏可容错，截断和附加说明得到明确错误。
-- 用户点击生成后立即看到旋转指示器、生成中文字和等待秒数，且不会产生重复请求。
+- 用户可以在 Settings 中启停 Thinking，并在开启时选择 `high` 或 `max`；默认值为开启和 `high`。
+- 用户点击生成后立即看到与 Thinking 设置一致的旋转指示器、生成中文字和等待秒数，且不会产生重复请求。
 - 首页四个领域不再只有数字，每张卡片都能提供最近变化和一条可验证信号。
 - 最近笔记内容和标题不会因首页增强而被自动发送给 DeepSeek。
 - 全部自动化测试、TypeScript 检查、生产构建、本地安装和运行时文件哈希校验通过。
