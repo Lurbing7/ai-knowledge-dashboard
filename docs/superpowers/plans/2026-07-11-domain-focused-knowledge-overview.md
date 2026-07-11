@@ -680,7 +680,7 @@ git add main.js styles.css
 git commit -m "build: 更新聚焦领域概览产物"
 ```
 
-- [ ] **步骤 6：推送并更新现有 Draft PR #3**
+- [x] **步骤 6：推送并更新现有 Draft PR #3**
 
 ```bash
 git push origin codex/sidebar-first-dashboard
