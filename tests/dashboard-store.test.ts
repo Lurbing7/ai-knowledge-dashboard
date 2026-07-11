@@ -17,6 +17,12 @@ const advice: ActionAdvice = {
 function createSnapshot(projectsSummary = "第一版"): LocalSnapshot {
   return {
     counts: { inbox: 1, domain: 2, projects: 3, wiki: 4 },
+    areas: {
+      inbox: { count: 1, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
+      domain: { count: 2, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
+      projects: { count: 3, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
+      wiki: { count: 4, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } }
+    },
     projectsSummary,
     healthSummary: "可用",
     tasks: [],

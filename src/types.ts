@@ -53,6 +53,30 @@ export interface TaskSummary {
   kind: string;
 }
 
+export interface RecentNote {
+  title: string;
+  path: string;
+  mtime: number;
+}
+
+export interface AreaSignal {
+  tone: "neutral" | "attention" | "healthy";
+  text: string;
+}
+
+export interface AreaSummary {
+  count: number;
+  recentNotes: RecentNote[];
+  signal: AreaSignal;
+}
+
+export interface AreaSummaries {
+  inbox: AreaSummary;
+  domain: AreaSummary;
+  projects: AreaSummary;
+  wiki: AreaSummary;
+}
+
 export interface LocalSnapshot {
   counts: {
     inbox: number;
@@ -60,6 +84,7 @@ export interface LocalSnapshot {
     projects: number;
     wiki: number;
   };
+  areas: AreaSummaries;
   projectsSummary: string;
   healthSummary: string;
   tasks: TaskSummary[];

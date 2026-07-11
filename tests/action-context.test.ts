@@ -4,6 +4,12 @@ import type { LocalSnapshot } from "../src/types";
 
 const snapshot: LocalSnapshot = {
   counts: { inbox: 2, domain: 10, projects: 3, wiki: 5 },
+  areas: {
+    inbox: { count: 2, recentNotes: [{ title: "Secret", path: "inbox/private.md", mtime: 1 }], signal: { tone: "attention", text: "最近变化" } },
+    domain: { count: 10, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
+    projects: { count: 3, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
+    wiki: { count: 5, recentNotes: [], signal: { tone: "healthy", text: "Wiki 已覆盖最近时间点" } }
+  },
   projectsSummary: "下一步：完成可验证交付。\n本地：C:\\develop\\secret\\note.md",
   healthSummary: "当前可用。\napi_key: should-not-leak",
   tasks: [{ title: "完成入口", status: "doing", kind: "project" }],
@@ -26,6 +32,8 @@ describe("action context", () => {
     expect(json).not.toContain("C:\\develop");
     expect(json).not.toContain("should-not-leak");
     expect(json).not.toContain("配置问题不发送给模型");
+    expect(json).not.toContain("inbox/private.md");
+    expect(json).not.toContain("recentNotes");
   });
 
   it("omits empty optional sources", () => {
