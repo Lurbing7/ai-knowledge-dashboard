@@ -9,11 +9,11 @@ import {
   TFolder,
   WorkspaceLeaf
 } from "obsidian";
+import { activateDashboard } from "./dashboard-lifecycle";
 
 const DASHBOARD_VIEW_TYPE = "ai-knowledge-dashboard-view";
 
 interface DashboardSettings {
-  openOnStartup: boolean;
   showPersonalStatus: boolean;
   actionLimit: number;
   inboxFolder: string;
@@ -24,7 +24,6 @@ interface DashboardSettings {
 }
 
 const DEFAULT_SETTINGS: DashboardSettings = {
-  openOnStartup: true,
   showPersonalStatus: true,
   actionLimit: 4,
   inboxFolder: "raw/inbox",
@@ -88,11 +87,6 @@ export default class AiKnowledgeDashboardPlugin extends Plugin {
 
     this.addSettingTab(new DashboardSettingTab(this.app, this));
 
-    if (this.settings.openOnStartup) {
-      this.app.workspace.onLayoutReady(() => {
-        void this.activateDashboardView();
-      });
-    }
   }
 
   onunload(): void {
@@ -100,20 +94,7 @@ export default class AiKnowledgeDashboardPlugin extends Plugin {
   }
 
   async activateDashboardView(): Promise<void> {
-    const leaves = this.app.workspace.getLeavesOfType(DASHBOARD_VIEW_TYPE);
-    const existingLeaf = leaves[0];
-
-    if (existingLeaf) {
-      this.app.workspace.revealLeaf(existingLeaf);
-      return;
-    }
-
-    const leaf = this.app.workspace.getLeaf(true);
-    await leaf.setViewState({
-      type: DASHBOARD_VIEW_TYPE,
-      active: true
-    });
-    this.app.workspace.revealLeaf(leaf);
+    await activateDashboard(this.app.workspace, DASHBOARD_VIEW_TYPE);
   }
 
   async loadSettings(): Promise<void> {
@@ -487,18 +468,6 @@ class DashboardSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
     containerEl.createEl("h2", { text: "AI Knowledge Dashboard" });
-
-    new Setting(containerEl)
-      .setName("Open on startup")
-      .setDesc("Automatically open the dashboard when Obsidian starts.")
-      .addToggle((toggle) => {
-        toggle
-          .setValue(this.plugin.settings.openOnStartup)
-          .onChange(async (value) => {
-            this.plugin.settings.openOnStartup = value;
-            await this.plugin.saveSettings();
-          });
-      });
 
     new Setting(containerEl)
       .setName("Show personal status")
