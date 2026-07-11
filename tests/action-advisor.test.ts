@@ -69,5 +69,7 @@ describe("action advice validation", () => {
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("context.sourceTypes");
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("唯一子集");
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("最多 5 项");
+    expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain('"actions"');
+    expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("只返回一个 JSON 对象");
   });
 });

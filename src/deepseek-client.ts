@@ -19,6 +19,8 @@ export interface DeepSeekTransport {
 export interface GenerateActionsRequest {
   apiKey: string;
   model: "deepseek-v4-flash" | "deepseek-v4-pro";
+  thinkingEnabled: boolean;
+  reasoningEffort: "high" | "max";
   context: ActionContext;
 }
 
@@ -40,32 +42,60 @@ function errorForStatus(status: number): Error {
   }
 }
 
-function extractContent(value: unknown): string {
+interface CompletionContent {
+  content: string;
+  finishReason: string;
+}
+
+function extractCompletion(value: unknown): CompletionContent {
   if (!value || typeof value !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const choices = (value as { choices?: unknown }).choices;
   if (!Array.isArray(choices) || choices.length === 0) {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const first = choices[0];
   if (!first || typeof first !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const message = (first as { message?: unknown }).message;
   if (!message || typeof message !== "object") {
-    return "";
+    return { content: "", finishReason: "" };
   }
   const content = (message as { content?: unknown }).content;
-  return typeof content === "string" ? content.trim() : "";
+  const finishReason = (first as { finish_reason?: unknown }).finish_reason;
+  return {
+    content: typeof content === "string" ? content.trim() : "",
+    finishReason: typeof finishReason === "string" ? finishReason : ""
+  };
 }
 
 function parseJson(content: string): unknown {
   try {
     return JSON.parse(content);
   } catch {
+    const fenced = content.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+    if (fenced) {
+      try {
+        return JSON.parse(fenced[1]);
+      } catch {
+        // Use the same safe error below without exposing model content.
+      }
+    }
     throw new Error("DeepSeek 返回的 JSON 无法解析，请重试。");
   }
+}
+
+function generationOptions(request: GenerateActionsRequest): Record<string, unknown> {
+  if (!request.thinkingEnabled) {
+    return { thinking: { type: "disabled" }, max_tokens: 3200 };
+  }
+  return {
+    thinking: { type: "enabled" },
+    reasoning_effort: request.reasoningEffort,
+    max_tokens: request.reasoningEffort === "max" ? 8000 : 4800
+  };
 }
 
 export class DeepSeekClient {
@@ -127,7 +157,7 @@ export class DeepSeekClient {
     if (response.status < 200 || response.status >= 300) {
       throw errorForStatus(response.status);
     }
-    const result = parseJson(extractContent(response.json));
+    const result = parseJson(extractCompletion(response.json).content);
     if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true) {
       throw new Error("DeepSeek 连接测试返回了无效结果。");
     }
@@ -152,7 +182,7 @@ export class DeepSeekClient {
         ],
         response_format: { type: "json_object" },
         stream: false,
-        max_tokens: 1600
+        ...generationOptions(request)
       }
     };
 
@@ -167,7 +197,11 @@ export class DeepSeekClient {
       if (response.status < 200 || response.status >= 300) {
         throw errorForStatus(response.status);
       }
-      const content = extractContent(response.json);
+      const completion = extractCompletion(response.json);
+      if (completion.finishReason === "length") {
+        throw new Error("DeepSeek 输出被截断，请降低推理强度或重试。");
+      }
+      const content = completion.content;
       if (content) {
         return parseActionAdvice(parseJson(content), request.context.sourceTypes);
       }
