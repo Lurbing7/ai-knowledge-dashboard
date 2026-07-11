@@ -31,6 +31,28 @@ describe("action advice validation", () => {
     }, ["Projects 行动看板"])).toThrow("未知来源");
   });
 
+  it("deduplicates repeated allowed sources before enforcing the limit", () => {
+    const parsed = parseActionAdvice({
+      actions: [{ ...validAction, sources: Array(6).fill("Projects 行动看板") }]
+    }, ["Projects 行动看板"]);
+
+    expect(parsed[0].sources).toEqual(["Projects 行动看板"]);
+  });
+
+  it("rejects more than five distinct allowed sources", () => {
+    const sources = ["来源 1", "来源 2", "来源 3", "来源 4", "来源 5", "来源 6"];
+
+    expect(() => parseActionAdvice({
+      actions: [{ ...validAction, sources }]
+    }, sources)).toThrow("1 到 5 项");
+  });
+
+  it("rejects unknown sources after normalization", () => {
+    expect(() => parseActionAdvice({
+      actions: [{ ...validAction, sources: [" Projects 行动看板 ", "未知来源"] }]
+    }, ["Projects 行动看板"])).toThrow("未知来源");
+  });
+
   it("rejects empty, oversized and malformed action lists", () => {
     expect(() => parseActionAdvice({ actions: [] }, [])).toThrow("1 到 3 条");
     expect(() => parseActionAdvice({ actions: Array(4).fill(validAction) }, ["Projects 行动看板"]))
@@ -44,5 +66,8 @@ describe("action advice validation", () => {
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("最多 3 条");
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("Paused/Future");
     expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("学习模式");
+    expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("context.sourceTypes");
+    expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("唯一子集");
+    expect(ACTION_ADVISOR_SYSTEM_PROMPT).toContain("最多 5 项");
   });
 });

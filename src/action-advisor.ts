@@ -3,6 +3,7 @@ import type { ActionAdvice, AdvicePriority, CollaborationMode } from "./types";
 export const ACTION_ADVISOR_SYSTEM_PROMPT = `你是个人知识库的下一步行动教练。
 只使用用户提供的 JSON 上下文，返回 JSON 对象，不得补充上下文之外的事实。
 actions 必须为 1 到最多 3 条，每条包含 priority、title、reason、sources、estimate、acceptance、mode、aiHelp。
+每条 sources 必须是 context.sourceTypes 的唯一子集，最多 5 项，不得重复或编造来源。
 priority 只允许 P0、P1、P2，按 P0、P1、P2 排序；Paused/Future 不得生成行动。
 Maintenance 只有在直接阻塞现实目标时才能建议，且不能作为 priority 值。
 技术学习和面试训练使用 learning（学习模式），机械维护和明确交付使用 execution（执行模式）。
@@ -31,11 +32,16 @@ function requiredText(value: unknown, field: string, maxLength: number): string 
 }
 
 function parseSources(value: unknown, allowedSources: Set<string>): string[] {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 5) {
+  if (!Array.isArray(value) || value.length === 0) {
     throw new Error("行动建议来源必须为 1 到 5 项");
   }
-  return value.map((source) => {
-    const text = requiredText(source, "sources", 100);
+
+  const sources = [...new Set(value.map(source => requiredText(source, "sources", 100)))];
+  if (sources.length > 5) {
+    throw new Error("行动建议来源必须为 1 到 5 项");
+  }
+
+  return sources.map(text => {
     if (!allowedSources.has(text)) {
       throw new Error(`行动建议引用了未知来源：${text}`);
     }
