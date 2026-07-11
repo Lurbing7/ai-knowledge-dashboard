@@ -354,6 +354,7 @@ async function collectLocalSnapshot(reader, settings) {
 var ACTION_ADVISOR_SYSTEM_PROMPT = `\u4F60\u662F\u4E2A\u4EBA\u77E5\u8BC6\u5E93\u7684\u4E0B\u4E00\u6B65\u884C\u52A8\u6559\u7EC3\u3002
 \u53EA\u4F7F\u7528\u7528\u6237\u63D0\u4F9B\u7684 JSON \u4E0A\u4E0B\u6587\uFF0C\u8FD4\u56DE JSON \u5BF9\u8C61\uFF0C\u4E0D\u5F97\u8865\u5145\u4E0A\u4E0B\u6587\u4E4B\u5916\u7684\u4E8B\u5B9E\u3002
 actions \u5FC5\u987B\u4E3A 1 \u5230\u6700\u591A 3 \u6761\uFF0C\u6BCF\u6761\u5305\u542B priority\u3001title\u3001reason\u3001sources\u3001estimate\u3001acceptance\u3001mode\u3001aiHelp\u3002
+\u6BCF\u6761 sources \u5FC5\u987B\u662F context.sourceTypes \u7684\u552F\u4E00\u5B50\u96C6\uFF0C\u6700\u591A 5 \u9879\uFF0C\u4E0D\u5F97\u91CD\u590D\u6216\u7F16\u9020\u6765\u6E90\u3002
 priority \u53EA\u5141\u8BB8 P0\u3001P1\u3001P2\uFF0C\u6309 P0\u3001P1\u3001P2 \u6392\u5E8F\uFF1BPaused/Future \u4E0D\u5F97\u751F\u6210\u884C\u52A8\u3002
 Maintenance \u53EA\u6709\u5728\u76F4\u63A5\u963B\u585E\u73B0\u5B9E\u76EE\u6807\u65F6\u624D\u80FD\u5EFA\u8BAE\uFF0C\u4E14\u4E0D\u80FD\u4F5C\u4E3A priority \u503C\u3002
 \u6280\u672F\u5B66\u4E60\u548C\u9762\u8BD5\u8BAD\u7EC3\u4F7F\u7528 learning\uFF08\u5B66\u4E60\u6A21\u5F0F\uFF09\uFF0C\u673A\u68B0\u7EF4\u62A4\u548C\u660E\u786E\u4EA4\u4ED8\u4F7F\u7528 execution\uFF08\u6267\u884C\u6A21\u5F0F\uFF09\u3002
@@ -378,11 +379,14 @@ function requiredText(value, field, maxLength) {
   return text;
 }
 function parseSources(value, allowedSources) {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 5) {
+  if (!Array.isArray(value) || value.length === 0) {
     throw new Error("\u884C\u52A8\u5EFA\u8BAE\u6765\u6E90\u5FC5\u987B\u4E3A 1 \u5230 5 \u9879");
   }
-  return value.map((source2) => {
-    const text = requiredText(source2, "sources", 100);
+  const sources = [...new Set(value.map((source2) => requiredText(source2, "sources", 100)))];
+  if (sources.length > 5) {
+    throw new Error("\u884C\u52A8\u5EFA\u8BAE\u6765\u6E90\u5FC5\u987B\u4E3A 1 \u5230 5 \u9879");
+  }
+  return sources.map((text) => {
     if (!allowedSources.has(text)) {
       throw new Error(`\u884C\u52A8\u5EFA\u8BAE\u5F15\u7528\u4E86\u672A\u77E5\u6765\u6E90\uFF1A${text}`);
     }

@@ -59,10 +59,15 @@ describe("final source contract", () => {
     expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
   });
 
-  it("uses the approved dashboard palette", () => {
-    expect(dashboardStyles).toContain("#E1BEE7");
-    expect(dashboardStyles).toContain("#F3E5F5");
-    expect(dashboardStyles).toContain("#FFFFFF");
-    expect(dashboardStyles).toContain("#BA68C8");
+  it("uses the restrained Obsidian-integrated dashboard palette", () => {
+    expect(dashboardStyles).toContain("#5CCEC4");
+    expect(dashboardStyles).toContain("#8AE7DC");
+    expect(dashboardStyles).toContain("#FFE0CA");
+    expect(dashboardStyles).toContain("#FFB8B8");
+    expect(dashboardStyles).toContain("var(--background-primary)");
+    expect(dashboardStyles).toContain("var(--background-secondary)");
+    expect(dashboardStyles).toContain("var(--background-modifier-border)");
+    expect(dashboardStyles).not.toContain("#BA68C8");
+    expect(dashboardStyles).not.toContain("#E1BEE7");
   });
 });
