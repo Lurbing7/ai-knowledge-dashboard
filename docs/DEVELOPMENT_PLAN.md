@@ -1,131 +1,69 @@
 # AI Knowledge Dashboard 开发计划
 
-## 项目定位
+## 当前定位
 
-这是一个独立 Obsidian 插件项目，后续可上传到 GitHub，作为个人 AI 知识库和 AI 编程实践项目展示。
+插件是知识库的行动入口，不是第二套知识库，也不负责自动扩张目录或生成大量维护任务。它应优先服务现实目标：学习成长、面试准备、项目交付和可复用知识沉淀。
 
-目标不是继续美化 Markdown 首页，而是提供一个真正的 Obsidian 插件 Dashboard：每次打开 Obsidian 后自动显示独立视图，帮助用户看到今日行动、行动指南、项目推进和知识库健康状态。
-
-## 技术选型
-
-- 语言：TypeScript
-- 插件 API：Obsidian Plugin API
-- UI：原生 DOM + CSS
-- 构建：esbuild
-- 第一版不引入 React / Vue / Svelte
-
-选择理由：
-
-- Obsidian 插件生态以 TypeScript 为主。
-- 原生 DOM 足够完成第一版 Dashboard，复杂度低。
-- 后续如果 UI 复杂度明显上升，再考虑引入 Svelte 或 React。
-
-## 第一阶段：插件最小可用框架
-
-目标：能在 Obsidian 中安装并打开一个 Dashboard 视图。
-
-任务：
-
-1. 创建插件项目结构。
-2. 添加 `manifest.json`。
-3. 添加 TypeScript 构建配置。
-4. 注册 `ai-knowledge-dashboard-view`。
-5. 启动时自动打开 Dashboard。
-6. 渲染静态 Dashboard UI。
-
-验收：
-
-- `npm run build` 能生成 `main.js` 和 `styles.css`。
-- 将产物复制到 vault 插件目录后，Obsidian 可以启用插件。
-- 启用插件后自动打开 Dashboard。
-
-## 第二阶段：Dashboard 内容模块
-
-目标：把我们讨论过的知识库驾驶舱内容落到插件视图。
-
-模块：
-
-- 左侧导航：Dashboard、Inbox、Action Guide、Projects、Knowledge Map、Health、Settings
-- 顶部搜索：搜索 notes / wiki / projects
-- 主 Banner：个人 AI 知识库与一人公司路线
-- 今日行动：当天最重要的 3-5 件事
-- 行动指南：目标、当前状态、下一步、原因、耗时、关联笔记、AI 可帮忙事项
-- 项目推进：bz-lottery、AI 知识库、求职简历、一人公司路线
-- 右侧统计：Raw、Wiki、概念页、Inbox、stale 笔记
-- 健康提醒：结构、新鲜度、索引状态
-
-## 第三阶段：读取知识库数据
-
-目标：让 Dashboard 不只是静态页面，而是从当前 vault 中读取真实信息。
-
-数据来源：
-
-- `raw/inbox/`
-- `raw/sources/`
-- `wiki/HEALTH.md`
-- 根目录行动类笔记，如 `一人公司路线图.md`、`项目交付SOP.md`
-- 后续可从项目元数据或 Action Guide 配置中读取目标和下一步行动
-
-第一版读取策略：
-
-- 使用 Obsidian `Vault` API 读取 Markdown 文件。
-- 文件不存在时使用默认内容兜底。
-- 不读取或展示个人敏感目录的具体内容，只显示状态数量或提醒。
-
-## 第四阶段：行动指南
-
-行动指南是这个插件的核心模块。
-
-结构：
+当前 0.2.0 架构已经收敛为：
 
 ```text
-目标 -> 当前状态 -> 下一步行动 -> 为什么做 -> 预计耗时 -> 关联笔记 -> AI 可帮忙事项
+Vault 有界数据源
+  -> 本地快照与指纹
+  -> Dashboard 状态（统计 / Health / Task Queue）
+  -> 用户手动确认
+  -> DeepSeek 生成最多三条行动
+  -> 执行、学习或回到笔记
 ```
 
-第一批行动指南：
+## 已完成
 
-1. 广州东附近求职
-2. bz-lottery 项目包装
-3. 个人 AI 知识库自生长
-4. AI 一人公司路线
+- `src/` 作为唯一源码，构建产物由仓库源码生成。
+- 数据源统一为 `{ enabled, path }`，空路径等同于关闭。
+- 默认适配 `inbox / domain / projects / wiki / private / assets` 最终结构。
+- User Profile 默认关闭，并使用章节与 frontmatter 白名单。
+- Vault 事件防抖刷新本地状态，内容改变后将旧 AI 建议标为过期。
+- DeepSeek 使用 Obsidian `requestUrl`，无本地子进程分析器依赖。
+- API Key 使用 Obsidian `SecretStorage`，连接测试不发送知识上下文。
+- 行动建议经过结构、优先级、协作模式与来源校验，最多保留三条。
+- Dashboard 标签固定，但插件加载时不创建、不 reveal、不抢焦点。
+- 安装脚本复制并校验三个运行文件的 SHA-256。
 
-示例：
+## 设计边界
 
-```text
-目标：广州东附近求职
-当前状态：已有 AI 项目、部署经验、知识库沉淀
-下一步：把 bz-lottery 改写成 AI 开发经验项目
-为什么做：国内招聘正在重视 AI 开发经验
-预计耗时：30-45 分钟
-关联笔记：简历、bz-lottery、一人公司路线
-AI 可帮忙：生成项目描述、提炼 STAR、检查简历表达
+- 不在 Vault 事件中自动调用 AI。
+- 不发送完整笔记、敏感目录内容、绝对路径、凭据或错误详情。
+- 不为 Paused/Future 目标生成行动；Maintenance 仅在阻断现实目标时出现。
+- 不恢复历史目录回退路径。
+- 不重新引入本地进程分析器、硬编码行动指南或“启动时打开 Dashboard”。
+- 不用 Dashboard 替代 Obsidian 的文章浏览和标签页行为。
+
+## 后续候选工作
+
+只有当真实使用暴露问题时再进入下一轮，优先级如下：
+
+1. 根据一段时间的实际建议质量，调整 Prompt 与上下文摘要，而不是增加更多数据源。
+2. 为行动增加“已完成 / 不适用 / 延后”反馈，用事实评估建议是否促进了学习或交付。
+3. 在不扩大隐私面的前提下，加入行动到 Projects 或学习队列的明确写入操作。
+4. 若 Dashboard 变复杂，再评估组件化 UI；当前继续使用原生 DOM + CSS。
+
+任何新模块都必须先回答：它服务哪个现实目标、是否减少维护负担、输入输出是什么、何时停止。
+
+## 发布门槛
+
+每次交付至少执行：
+
+```powershell
+npm run check
+npm run build
+npm run install:notes
+git diff --check
 ```
 
-## 第五阶段：设置页
+并人工确认：
 
-目标：让插件可配置。
-
-配置项：
-
-- 是否启动时自动打开 Dashboard
-- 默认聚焦目标
-- notes 根目录提示
-- 今日行动数量
-- 是否显示 personal 状态数量
-
-## 后续可选增强
-
-- 接入本地搜索索引
-- 调用外部 AI 生成行动建议
-- 支持自定义行动指南模板
-- 支持点击按钮创建新笔记
-- 支持健康检查命令
-- 支持导出日报 / 周报
-
-## 下一次继续时的建议步骤
-
-1. 运行 `npm install`。
-2. 运行 `npm run build`。
-3. 将插件产物复制到 notes vault 的 `.obsidian/plugins/ai-knowledge-dashboard/`。
-4. 在 Obsidian 启用插件。
-5. 根据实际效果继续打磨 UI 和数据读取。
+- 重启仍恢复原文章，Dashboard 不抢焦点。
+- 点击入口只复用或新建一个固定 Dashboard 标签。
+- 文件列表仍按 Obsidian 默认方式替换普通文章标签。
+- 数据源关闭后不读取，变化后本地状态刷新且建议变为过期。
+- Secret 连接测试、DeepSeek 生成和页面内错误展示符合预期。
+- 仓库与安装目录的 `manifest.json`、`main.js`、`styles.css` 哈希一致。
