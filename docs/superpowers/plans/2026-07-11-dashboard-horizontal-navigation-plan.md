@@ -28,20 +28,23 @@
 在最终源码契约中加入：
 
 ```ts
+const dashboardViewSource = readFileSync("src/views/dashboard-view.ts", "utf8");
+const dashboardStyles = readFileSync("src/styles.css", "utf8");
+
 it("uses a three-zone horizontal navigation", () => {
-  expect(allSource).toContain("akd-top-nav");
-  expect(allSource).toContain("akd-nav-home");
-  expect(allSource).toContain("akd-nav-scroll");
-  expect(allSource).toContain("akd-nav-settings");
-  expect(allSource).not.toContain("akd-sidebar");
-  expect(allSource).not.toContain("Knowledge OS");
+  expect(dashboardViewSource).toContain("akd-top-nav");
+  expect(dashboardViewSource).toContain("akd-nav-home");
+  expect(dashboardViewSource).toContain("akd-nav-scroll");
+  expect(dashboardViewSource).toContain("akd-nav-settings");
+  expect(dashboardViewSource).not.toContain("akd-sidebar");
+  expect(dashboardViewSource).not.toContain("Knowledge OS");
 });
 
 it("uses the approved dashboard palette", () => {
-  expect(allSource).toContain("#E1BEE7");
-  expect(allSource).toContain("#F3E5F5");
-  expect(allSource).toContain("#FFFFFF");
-  expect(allSource).toContain("#BA68C8");
+  expect(dashboardStyles).toContain("#E1BEE7");
+  expect(dashboardStyles).toContain("#F3E5F5");
+  expect(dashboardStyles).toContain("#FFFFFF");
+  expect(dashboardStyles).toContain("#BA68C8");
 });
 ```
 
