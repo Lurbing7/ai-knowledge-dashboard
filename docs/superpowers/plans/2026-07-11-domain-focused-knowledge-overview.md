@@ -633,7 +633,7 @@ git commit -m "feat: 实现覆盖式 Domain 领域栏"
 - 安装：`C:\develop\notes\.obsidian\plugins\ai-knowledge-dashboard\styles.css`
 - 安装：`C:\develop\notes\.obsidian\plugins\ai-knowledge-dashboard\manifest.json`
 
-- [ ] **步骤 1：执行完整验证与生产构建**
+- [x] **步骤 1：执行完整验证与生产构建**
 
 ```bash
 npm run check
@@ -643,7 +643,7 @@ git diff --check
 
 预期：TypeScript、全部 Vitest 测试和 esbuild 生产构建通过。
 
-- [ ] **步骤 2：检查交付范围**
+- [x] **步骤 2：检查交付范围**
 
 ```bash
 git status --short
@@ -653,7 +653,7 @@ git diff --name-only
 
 预期：只包含本计划列出的源码、测试、文档和构建产物；不得出现 `data.json`、API Key、用户画像或知识库私人文件。
 
-- [ ] **步骤 3：安装并校验运行文件**
+- [x] **步骤 3：安装并校验运行文件**
 
 ```bash
 npm run install:notes
@@ -661,7 +661,7 @@ npm run install:notes
 
 分别对仓库与 `C:\develop\notes\.obsidian\plugins\ai-knowledge-dashboard` 中的 `main.js`、`styles.css`、`manifest.json` 执行 `Get-FileHash`；预期三个文件均完全一致。
 
-- [ ] **步骤 4：在真实 Obsidian 布局中手动验收**
+- [x] **步骤 4：在真实 Obsidian 布局中手动验收**
 
 保持 Obsidian 原生左右侧栏打开，重新加载插件后验证：
 
@@ -673,7 +673,7 @@ npm run install:notes
 6. 缩窄中间内容区后出现横向选择器；恢复宽度后回到领域栏。
 7. 重开 Dashboard 后恢复上次领域选择。
 
-- [ ] **步骤 5：提交构建产物**
+- [x] **步骤 5：提交构建产物**
 
 ```bash
 git add main.js styles.css
