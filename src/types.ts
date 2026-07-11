@@ -44,3 +44,23 @@ export interface DashboardSettings {
   sources: DashboardSources;
   latestAdvice: AdviceState | null;
 }
+
+export interface TaskSummary {
+  title: string;
+  status: "todo" | "doing";
+  kind: string;
+}
+
+export interface LocalSnapshot {
+  counts: {
+    inbox: number;
+    domain: number;
+    projects: number;
+    wiki: number;
+  };
+  projectsSummary: string;
+  healthSummary: string;
+  tasks: TaskSummary[];
+  userProfileSummary: string;
+  issues: string[];
+}
