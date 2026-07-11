@@ -46,7 +46,7 @@ export class DashboardView extends ItemView {
     container.empty();
     container.addClass("akd-view");
     const shell = container.createDiv({ cls: "akd-shell" });
-    this.renderSidebar(shell);
+    this.renderNavigation(shell);
     const main = shell.createEl("main", { cls: "akd-main" });
     if (this.activePage === "dashboard") this.renderDashboard(main);
     if (this.activePage === "inbox") this.renderFilePage(main, "Inbox", this.controller.settings.sources.inbox);
@@ -56,31 +56,45 @@ export class DashboardView extends ItemView {
     if (this.activePage === "tasks") this.renderTasks(main);
   }
 
-  private renderSidebar(parent: HTMLElement): void {
-    const sidebar = parent.createEl("aside", { cls: "akd-sidebar" });
-    const brand = sidebar.createDiv({ cls: "akd-brand" });
-    brand.createDiv({ cls: "akd-logo", text: "AI" });
-    brand.createEl("strong", { text: "Knowledge OS" });
+  private renderNavigation(parent: HTMLElement): void {
+    const navigation = parent.createEl("nav", {
+      cls: "akd-top-nav",
+      attr: { "aria-label": "Dashboard navigation" }
+    });
+    const renderPageButton = (
+      target: HTMLElement,
+      page: DashboardPage,
+      label: string,
+      extraClass = ""
+    ): void => {
+      const classes = [
+        "akd-nav-item",
+        extraClass,
+        page === this.activePage ? "is-active" : ""
+      ].filter(Boolean).join(" ");
+      const button = target.createEl("button", { cls: classes, text: label });
+      button.addEventListener("click", () => {
+        this.activePage = page;
+        this.render();
+      });
+    };
+
+    renderPageButton(navigation, "dashboard", "Dashboard", "akd-nav-home");
+    const scroll = navigation.createDiv({ cls: "akd-nav-scroll" });
     const pages: Array<[DashboardPage, string]> = [
-      ["dashboard", "Dashboard"],
       ["inbox", "Inbox"],
       ["projects", "Projects"],
       ["knowledge", "Knowledge Map"],
       ["health", "Health"],
       ["tasks", "Action Guide"]
     ];
-    const nav = sidebar.createDiv({ cls: "akd-nav" });
     pages.forEach(([page, label]) => {
-      const button = nav.createEl("button", {
-        cls: page === this.activePage ? "akd-nav-item is-active" : "akd-nav-item",
-        text: label
-      });
-      button.addEventListener("click", () => {
-        this.activePage = page;
-        this.render();
-      });
+      renderPageButton(scroll, page, label);
     });
-    const settings = sidebar.createEl("button", { cls: "akd-nav-item", text: "Settings" });
+    const settings = navigation.createEl("button", {
+      cls: "akd-nav-item akd-nav-settings",
+      text: "Settings"
+    });
     settings.addEventListener("click", () => new Notice(
       "Open Settings → Community plugins → AI Knowledge Dashboard."
     ));
