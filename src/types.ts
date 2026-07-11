@@ -108,4 +108,5 @@ export interface DashboardState {
   advice: AdviceState | null;
   loading: boolean;
   issues: string[];
+  generationError?: string;
 }

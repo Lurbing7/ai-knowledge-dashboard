@@ -63,6 +63,18 @@ describe("DashboardStore", () => {
     expect(store.state.advice?.errorMessage).toBe("网络超时");
   });
 
+  it("keeps a first generation error separate from configuration issues", async () => {
+    const store = new DashboardStore(
+      () => structuredClone(DEFAULT_SETTINGS),
+      async () => createSnapshot()
+    );
+    await store.refresh();
+    store.setAdviceError("JSON 无法解析");
+
+    expect(store.state.generationError).toBe("JSON 无法解析");
+    expect(store.state.issues).not.toContain("JSON 无法解析");
+  });
+
   it("debounces relevant paths and ignores disabled sources", async () => {
     vi.useFakeTimers();
     const settings = structuredClone(DEFAULT_SETTINGS);

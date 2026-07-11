@@ -1,10 +1,26 @@
 import { ItemView, TFolder, WorkspaceLeaf } from "obsidian";
 import type { DashboardStore } from "../dashboard-store";
-import type { DashboardSettings, DashboardState, DataSourceSetting } from "../types";
+import type { AreaSummary, DashboardSettings, DashboardState, DataSourceSetting, RecentNote } from "../types";
 
 export const DASHBOARD_VIEW_TYPE = "ai-knowledge-dashboard-view";
 
-type DashboardPage = "dashboard" | "inbox" | "projects" | "knowledge" | "health" | "tasks";
+type DashboardPage = "dashboard" | "inbox" | "projects" | "knowledge" | "wiki" | "health" | "tasks";
+
+const EMPTY_AREA: AreaSummary = {
+  count: 0,
+  recentNotes: [],
+  signal: { tone: "neutral", text: "暂无笔记" }
+};
+
+function formatRelativeTime(mtime: number, now = Date.now()): string {
+  const seconds = Math.max(0, Math.floor((now - mtime) / 1_000));
+  if (seconds < 60) return "刚刚";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分钟前`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
+}
 
 export interface DashboardViewController {
   settings: DashboardSettings;
@@ -19,6 +35,8 @@ export class DashboardView extends ItemView {
   private unsubscribe: (() => void) | null = null;
   private includeUserProfile = true;
   private generating = false;
+  private generationStartedAt = 0;
+  private generationTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly controller: DashboardViewController) {
     super(leaf);
@@ -38,6 +56,7 @@ export class DashboardView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.stopGenerationTimer();
     this.unsubscribe?.();
     this.unsubscribe = null;
   }
@@ -53,6 +72,7 @@ export class DashboardView extends ItemView {
     if (this.activePage === "inbox") this.renderFilePage(main, "Inbox", this.controller.settings.sources.inbox);
     if (this.activePage === "projects") this.renderFilePage(main, "Projects", this.controller.settings.sources.projects);
     if (this.activePage === "knowledge") this.renderKnowledge(main);
+    if (this.activePage === "wiki") this.renderFilePage(main, "Wiki", this.controller.settings.sources.wiki);
     if (this.activePage === "health") this.renderHealth(main);
     if (this.activePage === "tasks") this.renderTasks(main);
   }
@@ -86,6 +106,7 @@ export class DashboardView extends ItemView {
       ["inbox", "Inbox"],
       ["projects", "Projects"],
       ["knowledge", "Knowledge Map"],
+      ["wiki", "Wiki"],
       ["health", "Health"],
       ["tasks", "Action Guide"]
     ];
@@ -105,12 +126,12 @@ export class DashboardView extends ItemView {
     header.createEl("h1", { text: "AI Knowledge Dashboard" });
     header.createEl("p", { text: "本地状态由 Vault 事件刷新；只有你点击后才调用 DeepSeek。" });
 
-    const counts = this.state.snapshot?.counts ?? { inbox: 0, domain: 0, projects: 0, wiki: 0 };
+    const areas = this.state.snapshot?.areas;
     const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderStat(stats, counts.inbox, "Inbox");
-    this.renderStat(stats, counts.domain, "Domain");
-    this.renderStat(stats, counts.projects, "Projects");
-    this.renderStat(stats, counts.wiki, "Wiki");
+    this.renderAreaCard(stats, areas?.inbox ?? EMPTY_AREA, "Inbox", "inbox");
+    this.renderAreaCard(stats, areas?.domain ?? EMPTY_AREA, "Domain", "knowledge");
+    this.renderAreaCard(stats, areas?.projects ?? EMPTY_AREA, "Projects", "projects");
+    this.renderAreaCard(stats, areas?.wiki ?? EMPTY_AREA, "Wiki", "wiki");
 
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
@@ -132,30 +153,56 @@ export class DashboardView extends ItemView {
       label.appendText(" 本次包含经过筛选的用户画像优先级");
     }
     const button = controls.createEl("button", {
-      text: this.generating ? "Generating…" : "生成下一步行动"
+      text: this.generating ? "生成中" : "生成下一步行动"
     });
     button.disabled = this.generating || !this.state.context;
-    button.addEventListener("click", () => void this.generate(button));
+    button.addEventListener("click", () => void this.generate());
 
+    this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
   }
 
-  private async generate(button: HTMLButtonElement): Promise<void> {
+  private async generate(): Promise<void> {
     if (this.generating) return;
     this.generating = true;
-    button.disabled = true;
-    button.setText("Generating…");
+    this.generationStartedAt = Date.now();
+    this.controller.store.clearGenerationError();
+    this.render();
+    this.generationTimer = setInterval(() => this.render(), 1_000);
     try {
       await this.controller.generateAdvice(this.includeUserProfile);
     } finally {
       this.generating = false;
+      this.stopGenerationTimer();
       this.render();
     }
+  }
+
+  private stopGenerationTimer(): void {
+    if (this.generationTimer) clearInterval(this.generationTimer);
+    this.generationTimer = null;
+  }
+
+  private renderGenerationStatus(parent: HTMLElement): void {
+    if (!this.generating) return;
+    const status = parent.createDiv({ cls: "akd-generation-status", attr: { "aria-live": "polite" } });
+    status.createSpan({ cls: "akd-spinner", attr: { "aria-hidden": "true" } });
+    status.createSpan({
+      text: this.controller.settings.deepseekThinkingEnabled
+        ? "DeepSeek 正在思考并生成行动建议…"
+        : "DeepSeek 正在生成行动建议…"
+    });
+    const elapsed = Math.max(0, Math.floor((Date.now() - this.generationStartedAt) / 1_000));
+    status.createEl("small", { text: `已等待 ${elapsed} 秒` });
   }
 
   private renderAdvice(parent: HTMLElement): void {
     const advice = this.state.advice;
     if (!advice) {
+      if (this.state.generationError) {
+        parent.createDiv({ cls: "akd-message akd-advice-error", text: this.state.generationError });
+        return;
+      }
       parent.createDiv({ cls: "akd-message", text: "尚未生成行动建议。" });
       return;
     }
@@ -242,6 +289,7 @@ export class DashboardView extends ItemView {
       card.createEl("h3", { text: task.title });
     });
     if (tasks.length === 0) grid.createDiv({ cls: "akd-message", text: "当前没有 todo / doing AI 维护任务。" });
+    this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
   }
 
@@ -252,10 +300,38 @@ export class DashboardView extends ItemView {
     header.createEl("p", { text: description });
   }
 
-  private renderStat(parent: HTMLElement, value: number, label: string): void {
-    const card = parent.createDiv({ cls: "akd-progress-card" });
-    card.createEl("strong", { text: String(value) });
-    card.createEl("span", { text: label });
+  private renderAreaCard(
+    parent: HTMLElement,
+    area: AreaSummary,
+    label: string,
+    page: DashboardPage
+  ): void {
+    const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
+    const heading = card.createDiv({ cls: "akd-area-heading" });
+    heading.createEl("span", { text: label });
+    heading.createEl("strong", { text: String(area.count) });
+    card.createDiv({
+      cls: `akd-area-signal is-${area.signal.tone}`,
+      text: area.signal.text
+    });
+    const notes = card.createDiv({ cls: "akd-recent-notes" });
+    area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
+    if (area.recentNotes.length === 0) notes.createEl("small", { text: "暂无最近笔记" });
+    const all = card.createEl("button", { cls: "akd-area-link", text: "查看全部" });
+    all.addEventListener("click", () => {
+      this.activePage = page;
+      this.render();
+    });
+  }
+
+  private renderRecentNote(parent: HTMLElement, note: RecentNote): void {
+    const button = parent.createEl("button", { cls: "akd-recent-note" });
+    button.createSpan({ text: note.title });
+    button.createEl("small", { text: formatRelativeTime(note.mtime) });
+    button.addEventListener("click", () => {
+      const file = this.app.vault.getFileByPath(note.path);
+      if (file) void this.openFile(file);
+    });
   }
 
   private async openFile(file: Parameters<WorkspaceLeaf["openFile"]>[0]): Promise<void> {

@@ -70,4 +70,15 @@ describe("final source contract", () => {
     expect(dashboardStyles).not.toContain("#BA68C8");
     expect(dashboardStyles).not.toContain("#E1BEE7");
   });
+
+  it("shows generation feedback and actionable area summaries", () => {
+    expect(dashboardViewSource).toContain("akd-generation-status");
+    expect(dashboardViewSource).toContain("akd-spinner");
+    expect(dashboardViewSource).toContain("正在思考并生成行动建议");
+    expect(dashboardViewSource).toContain("recentNotes");
+    expect(dashboardViewSource).toContain("查看全部");
+    expect(dashboardViewSource).toContain('["wiki", "Wiki"]');
+    expect(dashboardStyles).toContain("@keyframes akd-spin");
+    expect(dashboardStyles).toContain("prefers-reduced-motion: reduce");
+  });
 });
