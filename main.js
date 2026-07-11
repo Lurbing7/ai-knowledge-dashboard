@@ -908,12 +908,12 @@ var DashboardView = class extends import_obsidian3.ItemView {
     renderPageButton(navigation, "dashboard", "Dashboard", "akd-nav-home");
     const scroll = navigation.createDiv({ cls: "akd-nav-scroll" });
     const pages = [
-      ["inbox", "Inbox"],
+      ["tasks", "Action Guide"],
       ["projects", "Projects"],
+      ["inbox", "Inbox"],
       ["knowledge", "Knowledge Map"],
       ["wiki", "Wiki"],
-      ["health", "Health"],
-      ["tasks", "Action Guide"]
+      ["health", "Health"]
     ];
     pages.forEach(([page, label]) => {
       renderPageButton(scroll, page, label);
@@ -926,16 +926,6 @@ var DashboardView = class extends import_obsidian3.ItemView {
   }
   renderDashboard(parent) {
     var _a, _b, _c, _d, _e, _f, _g;
-    const header = parent.createDiv({ cls: "akd-hero" });
-    header.createEl("span", { text: "NEXT ACTIONS" });
-    header.createEl("h1", { text: "AI Knowledge Dashboard" });
-    header.createEl("p", { text: "\u672C\u5730\u72B6\u6001\u7531 Vault \u4E8B\u4EF6\u5237\u65B0\uFF1B\u53EA\u6709\u4F60\u70B9\u51FB\u540E\u624D\u8C03\u7528 DeepSeek\u3002" });
-    const areas = (_a = this.state.snapshot) == null ? void 0 : _a.areas;
-    const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderAreaCard(stats, (_b = areas == null ? void 0 : areas.inbox) != null ? _b : EMPTY_AREA, "Inbox", "inbox");
-    this.renderAreaCard(stats, (_c = areas == null ? void 0 : areas.domain) != null ? _c : EMPTY_AREA, "Domain", "knowledge");
-    this.renderAreaCard(stats, (_d = areas == null ? void 0 : areas.projects) != null ? _d : EMPTY_AREA, "Projects", "projects");
-    this.renderAreaCard(stats, (_e = areas == null ? void 0 : areas.wiki) != null ? _e : EMPTY_AREA, "Wiki", "wiki");
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
       issues.createEl("strong", { text: "Configuration or refresh issue" });
@@ -944,7 +934,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
     }
     const controls = parent.createDiv({ cls: "akd-ai-controls" });
     controls.createEl("h2", { text: "\u4E0B\u4E00\u6B65\u884C\u52A8\u5EFA\u8BAE" });
-    const sources = (_g = (_f = this.state.context) == null ? void 0 : _f.sourceTypes) != null ? _g : [];
+    const sources = (_b = (_a = this.state.context) == null ? void 0 : _a.sourceTypes) != null ? _b : [];
     controls.createEl("p", { text: `\u672C\u6B21\u6570\u636E\u7C7B\u578B\uFF1A${sources.join("\u3001") || "\u5C1A\u65E0\u53EF\u7528\u6570\u636E"}` });
     const hasProfile = sources.includes("\u7528\u6237\u753B\u50CF\u4F18\u5148\u7EA7");
     if (hasProfile) {
@@ -963,6 +953,15 @@ var DashboardView = class extends import_obsidian3.ItemView {
     button.addEventListener("click", () => void this.generate());
     this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
+    const overview = parent.createDiv({ cls: "akd-overview-header" });
+    overview.createEl("h2", { text: "\u77E5\u8BC6\u9886\u57DF\u6982\u89C8" });
+    overview.createEl("p", { text: "\u6700\u8FD1\u53D8\u5316\u4E0E\u5F53\u524D\u89C4\u6A21" });
+    const areas = (_c = this.state.snapshot) == null ? void 0 : _c.areas;
+    const stats = parent.createDiv({ cls: "akd-progress-cards" });
+    this.renderAreaCard(stats, (_d = areas == null ? void 0 : areas.inbox) != null ? _d : EMPTY_AREA, "Inbox", "inbox");
+    this.renderAreaCard(stats, (_e = areas == null ? void 0 : areas.domain) != null ? _e : EMPTY_AREA, "Domain", "knowledge");
+    this.renderAreaCard(stats, (_f = areas == null ? void 0 : areas.projects) != null ? _f : EMPTY_AREA, "Projects", "projects");
+    this.renderAreaCard(stats, (_g = areas == null ? void 0 : areas.wiki) != null ? _g : EMPTY_AREA, "Wiki", "wiki");
   }
   async generate() {
     if (this.generating) return;
@@ -1060,12 +1059,27 @@ var DashboardView = class extends import_obsidian3.ItemView {
   }
   renderHealth(parent) {
     var _a;
-    this.renderPageHeader(parent, "Health", this.controller.settings.sources.health.path);
+    const source2 = this.controller.settings.sources.health;
+    this.renderPageHeader(parent, "Health", source2.enabled ? source2.path : "\u672A\u914D\u7F6E");
+    if (!source2.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Health \u6570\u636E\u6E90\u672A\u542F\u7528\u3002" });
+      return;
+    }
     const summary = (_a = this.state.snapshot) == null ? void 0 : _a.healthSummary;
-    parent.createEl("pre", {
-      cls: "akd-health-summary",
-      text: summary || "Health \u6570\u636E\u6E90\u672A\u542F\u7528\u3001\u7F3A\u5931\u6216\u6CA1\u6709\u53EF\u89E3\u6790\u5185\u5BB9\u3002"
-    });
+    if (summary) {
+      const content = parent.createDiv({ cls: "akd-health-content markdown-rendered" });
+      void import_obsidian3.MarkdownRenderer.render(this.app, summary, content, source2.path, this);
+    } else {
+      parent.createDiv({ cls: "akd-message", text: "Health \u6570\u636E\u6E90\u7F3A\u5931\u6216\u6CA1\u6709\u53EF\u89E3\u6790\u5185\u5BB9\u3002" });
+    }
+    const file = this.app.vault.getFileByPath(source2.path);
+    if (file) {
+      const openSource = parent.createEl("button", {
+        cls: "akd-health-source",
+        text: "\u6253\u5F00 Health \u539F\u6587"
+      });
+      openSource.addEventListener("click", () => void this.openFile(file));
+    }
   }
   renderTasks(parent) {
     var _a, _b;
@@ -1090,8 +1104,14 @@ var DashboardView = class extends import_obsidian3.ItemView {
   renderAreaCard(parent, area, label, page) {
     const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
     const heading = card.createDiv({ cls: "akd-area-heading" });
-    heading.createEl("span", { text: label });
-    heading.createEl("strong", { text: String(area.count) });
+    const title = heading.createDiv({ cls: "akd-area-title" });
+    title.createEl("span", { text: label });
+    title.createEl("strong", { text: String(area.count) });
+    const all = heading.createEl("button", { cls: "akd-area-link", text: "\u67E5\u770B \u2192" });
+    all.addEventListener("click", () => {
+      this.activePage = page;
+      this.render();
+    });
     card.createDiv({
       cls: `akd-area-signal is-${area.signal.tone}`,
       text: area.signal.text
@@ -1099,15 +1119,13 @@ var DashboardView = class extends import_obsidian3.ItemView {
     const notes = card.createDiv({ cls: "akd-recent-notes" });
     area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
     if (area.recentNotes.length === 0) notes.createEl("small", { text: "\u6682\u65E0\u6700\u8FD1\u7B14\u8BB0" });
-    const all = card.createEl("button", { cls: "akd-area-link", text: "\u67E5\u770B\u5168\u90E8" });
-    all.addEventListener("click", () => {
-      this.activePage = page;
-      this.render();
-    });
   }
   renderRecentNote(parent, note) {
-    const button = parent.createEl("button", { cls: "akd-recent-note" });
-    button.createSpan({ text: note.title });
+    const button = parent.createEl("button", {
+      cls: "akd-recent-note",
+      attr: { title: note.title }
+    });
+    button.createSpan({ cls: "akd-recent-note-title", text: note.title });
     button.createEl("small", { text: formatRelativeTime(note.mtime) });
     button.addEventListener("click", () => {
       const file = this.app.vault.getFileByPath(note.path);
