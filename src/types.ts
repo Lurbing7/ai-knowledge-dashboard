@@ -64,3 +64,21 @@ export interface LocalSnapshot {
   userProfileSummary: string;
   issues: string[];
 }
+
+export interface ActionContext {
+  sourceTypes: string[];
+  statistics: LocalSnapshot["counts"];
+  projects?: string;
+  health?: string;
+  tasks?: TaskSummary[];
+  userProfile?: string;
+}
+
+export interface DashboardState {
+  snapshot: LocalSnapshot | null;
+  context: ActionContext | null;
+  contextFingerprint: string;
+  advice: AdviceState | null;
+  loading: boolean;
+  issues: string[];
+}
