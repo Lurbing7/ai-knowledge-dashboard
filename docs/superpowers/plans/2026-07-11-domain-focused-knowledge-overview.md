@@ -364,7 +364,7 @@ git commit -m "feat: 记忆 Dashboard 聚焦领域"
 - 修改：`src/views/dashboard-view.ts`
 - 修改：`tests/source-contract.test.ts`
 
-- [ ] **步骤 1：把旧四卡契约改为领域浏览器契约**
+- [x] **步骤 1：把旧四卡契约改为领域浏览器契约**
 
 删除 `tests/source-contract.test.ts` 中对 `akd-progress-cards`、两列卡片和“查看 →”的要求，增加：
 
@@ -385,7 +385,7 @@ it("renders a focused Domain browser after action guidance", () => {
 
 增加源码契约，要求 `aria-pressed`、完整标题 `title` 和 Knowledge Map 当前领域样式存在。
 
-- [ ] **步骤 2：运行源码契约确认失败**
+- [x] **步骤 2：运行源码契约确认失败**
 
 运行：
 
@@ -395,7 +395,7 @@ npm test -- --run tests/source-contract.test.ts
 
 预期：FAIL，缺少 `akd-domain-overview`，且仍包含 `renderAreaCard`。
 
-- [ ] **步骤 3：接入聚焦状态并渲染空状态**
+- [x] **步骤 3：接入聚焦状态并渲染空状态**
 
 在 `DashboardView` 增加：
 
@@ -416,7 +416,7 @@ this.renderDomainOverview(parent);
 parent.createDiv({ cls: "akd-message", text: "Domain 下暂无知识领域。" });
 ```
 
-- [ ] **步骤 4：渲染桌面 rail 和窄屏 tabs**
+- [x] **步骤 4：渲染桌面 rail 和窄屏 tabs**
 
 使用同一组领域生成两个选择入口，避免两套状态：
 
@@ -443,7 +443,7 @@ this.renderFocusedDomain(overview, focused);
 
 领域按钮设置 `title: domain.name`、`aria-pressed`，点击时只修改当前 path、调用 controller 保存并重新渲染。
 
-- [ ] **步骤 5：渲染三篇最近笔记与进入领域行为**
+- [x] **步骤 5：渲染三篇最近笔记与进入领域行为**
 
 聚焦主体使用现有 `renderRecentNote` 打开新标签，并明确空状态：
 
@@ -468,7 +468,7 @@ enter.addEventListener("click", () => {
 
 删除 `EMPTY_AREA`、`renderAreaCard` 及不再使用的 `AreaSummary` import。
 
-- [ ] **步骤 6：让 Knowledge Map 标记并定位当前领域**
+- [x] **步骤 6：让 Knowledge Map 标记并定位当前领域**
 
 在 `renderKnowledge` 创建每张卡片时设置：
 
@@ -480,7 +480,7 @@ if (child.path === this.focusedKnowledgePath) {
 }
 ```
 
-- [ ] **步骤 7：运行契约与完整类型检查**
+- [x] **步骤 7：运行契约与完整类型检查**
 
 运行：
 
@@ -491,7 +491,7 @@ npm run check
 
 预期：源码契约 PASS；TypeScript 与全部测试 PASS。
 
-- [ ] **步骤 8：提交领域视图结构**
+- [x] **步骤 8：提交领域视图结构**
 
 ```bash
 git add src/views/dashboard-view.ts tests/source-contract.test.ts

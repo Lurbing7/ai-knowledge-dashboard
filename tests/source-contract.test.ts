@@ -60,28 +60,28 @@ describe("final source contract", () => {
     const projects = dashboardViewSource.indexOf('["projects", "Projects"]');
     const inbox = dashboardViewSource.indexOf('["inbox", "Inbox"]');
     const actionControls = dashboardViewSource.indexOf('cls: "akd-ai-controls"');
-    const areaCards = dashboardViewSource.indexOf('cls: "akd-progress-cards"');
+    const domainOverview = dashboardViewSource.indexOf('cls: "akd-domain-overview"');
 
     expect(actionGuide).toBeGreaterThan(-1);
     expect(actionGuide).toBeLessThan(projects);
     expect(projects).toBeLessThan(inbox);
-    expect(actionControls).toBeLessThan(areaCards);
+    expect(actionControls).toBeLessThan(domainOverview);
     expect(dashboardViewSource).not.toContain("akd-hero");
     expect(dashboardStyles).not.toContain(".akd-hero");
   });
 
-  it("adapts area cards to the dashboard container and preserves long titles", () => {
-    expect(dashboardStyles).toContain("container-type: inline-size");
-    expect(dashboardStyles).toContain("grid-template-columns: repeat(2, minmax(0, 1fr))");
-    expect(dashboardStyles).toContain("@container (max-width: 760px)");
-    expect(dashboardStyles).not.toContain("repeat(4, minmax(0, 1fr))");
-    expect(dashboardStyles).toContain("-webkit-line-clamp: 2");
-    expect(dashboardStyles).toContain("overflow-wrap: anywhere");
-    expect(dashboardStyles).toContain("appearance: none");
-    expect(dashboardStyles).toContain("box-shadow: none");
+  it("renders a focused Domain browser after action guidance", () => {
+    expect(dashboardViewSource).toContain("akd-domain-rail");
+    expect(dashboardViewSource).toContain("akd-domain-tabs");
+    expect(dashboardViewSource).toContain("akd-domain-focus");
+    expect(dashboardViewSource).toContain("最近 3 篇笔记");
+    expect(dashboardViewSource).toContain("进入 ${domain.name} 领域 →");
+    expect(dashboardViewSource).toContain('"aria-pressed"');
+    expect(dashboardViewSource).toContain("is-focused-domain");
+    expect(dashboardViewSource).not.toContain("renderAreaCard");
+    expect(dashboardViewSource).not.toContain("akd-progress-cards");
     expect(dashboardViewSource).toContain('attr: { title: note.title }');
     expect(dashboardViewSource).toContain('cls: "akd-recent-note-title"');
-    expect(dashboardViewSource).toContain('text: "查看 →"');
   });
 
   it("renders the Health summary as Obsidian Markdown and links to its source", () => {
@@ -119,12 +119,10 @@ describe("final source contract", () => {
     expect(dashboardStyles).not.toContain("#E1BEE7");
   });
 
-  it("shows generation feedback and actionable area summaries", () => {
+  it("shows generation feedback and keeps the global Wiki navigation", () => {
     expect(dashboardViewSource).toContain("akd-generation-status");
     expect(dashboardViewSource).toContain("akd-spinner");
     expect(dashboardViewSource).toContain("正在思考并生成行动建议");
-    expect(dashboardViewSource).toContain("recentNotes");
-    expect(dashboardViewSource).toContain("查看 →");
     expect(dashboardViewSource).toContain('["wiki", "Wiki"]');
     expect(dashboardStyles).toContain("@keyframes akd-spin");
     expect(dashboardStyles).toContain("prefers-reduced-motion: reduce");
