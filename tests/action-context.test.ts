@@ -10,6 +10,14 @@ const snapshot: LocalSnapshot = {
     projects: { count: 3, recentNotes: [], signal: { tone: "neutral", text: "暂无笔记" } },
     wiki: { count: 5, recentNotes: [], signal: { tone: "healthy", text: "Wiki 已覆盖最近时间点" } }
   },
+  domains: [{
+    name: "it",
+    path: "domain/it",
+    count: 1,
+    latestMtime: 1,
+    recentLocation: "it",
+    recentNotes: [{ title: "Private note", path: "domain/it/private-note.md", mtime: 1 }]
+  }],
   projectsSummary: "下一步：完成可验证交付。\n本地：C:\\develop\\secret\\note.md",
   healthSummary: "当前可用。\napi_key: should-not-leak",
   tasks: [{ title: "完成入口", status: "doing", kind: "project" }],
@@ -33,6 +41,8 @@ describe("action context", () => {
     expect(json).not.toContain("should-not-leak");
     expect(json).not.toContain("配置问题不发送给模型");
     expect(json).not.toContain("inbox/private.md");
+    expect(json).not.toContain("domain/it/private-note.md");
+    expect(json).not.toContain("DomainSummary");
     expect(json).not.toContain("recentNotes");
   });
 

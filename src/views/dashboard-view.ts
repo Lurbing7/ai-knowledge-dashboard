@@ -1,16 +1,11 @@
-import { ItemView, TFolder, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, TFolder, WorkspaceLeaf } from "obsidian";
 import type { DashboardStore } from "../dashboard-store";
-import type { AreaSummary, DashboardSettings, DashboardState, DataSourceSetting, RecentNote } from "../types";
+import { domainShortLabel, resolveFocusedDomain } from "../domain-focus";
+import type { DashboardSettings, DashboardState, DataSourceSetting, DomainSummary, RecentNote } from "../types";
 
 export const DASHBOARD_VIEW_TYPE = "ai-knowledge-dashboard-view";
 
 type DashboardPage = "dashboard" | "inbox" | "projects" | "knowledge" | "wiki" | "health" | "tasks";
-
-const EMPTY_AREA: AreaSummary = {
-  count: 0,
-  recentNotes: [],
-  signal: { tone: "neutral", text: "暂无笔记" }
-};
 
 function formatRelativeTime(mtime: number, now = Date.now()): string {
   const seconds = Math.max(0, Math.floor((now - mtime) / 1_000));
@@ -26,6 +21,7 @@ export interface DashboardViewController {
   settings: DashboardSettings;
   store: DashboardStore;
   generateAdvice(includeUserProfile: boolean): Promise<void>;
+  setFocusedDomainPath(path: string): Promise<void>;
   openSettings(): void;
 }
 
@@ -37,10 +33,13 @@ export class DashboardView extends ItemView {
   private generating = false;
   private generationStartedAt = 0;
   private generationTimer: ReturnType<typeof setInterval> | null = null;
+  private focusedDomainPath?: string;
+  private focusedKnowledgePath: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, private readonly controller: DashboardViewController) {
     super(leaf);
     this.state = controller.store.state;
+    this.focusedDomainPath = controller.settings.focusedDomainPath;
   }
 
   getViewType(): string { return DASHBOARD_VIEW_TYPE; }
@@ -103,12 +102,12 @@ export class DashboardView extends ItemView {
     renderPageButton(navigation, "dashboard", "Dashboard", "akd-nav-home");
     const scroll = navigation.createDiv({ cls: "akd-nav-scroll" });
     const pages: Array<[DashboardPage, string]> = [
-      ["inbox", "Inbox"],
+      ["tasks", "Action Guide"],
       ["projects", "Projects"],
+      ["inbox", "Inbox"],
       ["knowledge", "Knowledge Map"],
       ["wiki", "Wiki"],
-      ["health", "Health"],
-      ["tasks", "Action Guide"]
+      ["health", "Health"]
     ];
     pages.forEach(([page, label]) => {
       renderPageButton(scroll, page, label);
@@ -121,18 +120,6 @@ export class DashboardView extends ItemView {
   }
 
   private renderDashboard(parent: HTMLElement): void {
-    const header = parent.createDiv({ cls: "akd-hero" });
-    header.createEl("span", { text: "NEXT ACTIONS" });
-    header.createEl("h1", { text: "AI Knowledge Dashboard" });
-    header.createEl("p", { text: "本地状态由 Vault 事件刷新；只有你点击后才调用 DeepSeek。" });
-
-    const areas = this.state.snapshot?.areas;
-    const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderAreaCard(stats, areas?.inbox ?? EMPTY_AREA, "Inbox", "inbox");
-    this.renderAreaCard(stats, areas?.domain ?? EMPTY_AREA, "Domain", "knowledge");
-    this.renderAreaCard(stats, areas?.projects ?? EMPTY_AREA, "Projects", "projects");
-    this.renderAreaCard(stats, areas?.wiki ?? EMPTY_AREA, "Wiki", "wiki");
-
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
       issues.createEl("strong", { text: "Configuration or refresh issue" });
@@ -160,6 +147,11 @@ export class DashboardView extends ItemView {
 
     this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
+
+    const overview = parent.createDiv({ cls: "akd-overview-header" });
+    overview.createEl("h2", { text: "知识领域" });
+    overview.createEl("p", { text: "按最近活动排序" });
+    this.renderDomainOverview(parent);
   }
 
   private async generate(): Promise<void> {
@@ -265,18 +257,40 @@ export class DashboardView extends ItemView {
     folder.children.filter((child): child is TFolder => child instanceof TFolder).forEach((child) => {
       const count = this.app.vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${child.path}/`)).length;
       const card = grid.createDiv({ cls: "akd-map-card" });
+      card.dataset.domainPath = child.path;
       card.createEl("h3", { text: child.name });
       card.createEl("p", { text: `${count} notes` });
+      if (child.path === this.focusedKnowledgePath) {
+        card.addClass("is-focused-domain");
+        requestAnimationFrame(() => card.scrollIntoView({ block: "nearest" }));
+      }
     });
   }
 
   private renderHealth(parent: HTMLElement): void {
-    this.renderPageHeader(parent, "Health", this.controller.settings.sources.health.path);
+    const source = this.controller.settings.sources.health;
+    this.renderPageHeader(parent, "Health", source.enabled ? source.path : "未配置");
+    if (!source.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Health 数据源未启用。" });
+      return;
+    }
+
     const summary = this.state.snapshot?.healthSummary;
-    parent.createEl("pre", {
-      cls: "akd-health-summary",
-      text: summary || "Health 数据源未启用、缺失或没有可解析内容。"
-    });
+    if (summary) {
+      const content = parent.createDiv({ cls: "akd-health-content markdown-rendered" });
+      void MarkdownRenderer.render(this.app, summary, content, source.path, this);
+    } else {
+      parent.createDiv({ cls: "akd-message", text: "Health 数据源缺失或没有可解析内容。" });
+    }
+
+    const file = this.app.vault.getFileByPath(source.path);
+    if (file) {
+      const openSource = parent.createEl("button", {
+        cls: "akd-health-source",
+        text: "打开 Health 原文"
+      });
+      openSource.addEventListener("click", () => void this.openFile(file));
+    }
   }
 
   private renderTasks(parent: HTMLElement): void {
@@ -300,33 +314,115 @@ export class DashboardView extends ItemView {
     header.createEl("p", { text: description });
   }
 
-  private renderAreaCard(
-    parent: HTMLElement,
-    area: AreaSummary,
-    label: string,
-    page: DashboardPage
-  ): void {
-    const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
-    const heading = card.createDiv({ cls: "akd-area-heading" });
-    heading.createEl("span", { text: label });
-    heading.createEl("strong", { text: String(area.count) });
-    card.createDiv({
-      cls: `akd-area-signal is-${area.signal.tone}`,
-      text: area.signal.text
+  private renderDomainOverview(parent: HTMLElement): void {
+    const source = this.controller.settings.sources.domain;
+    if (!source.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Domain 数据源未启用。" });
+      return;
+    }
+    if (this.state.issues.some((issue) => issue.startsWith("Domain 路径不存在"))) return;
+
+    const domains = this.state.snapshot?.domains ?? [];
+    if (domains.length === 0) {
+      parent.createDiv({ cls: "akd-message", text: "Domain 下暂无知识领域。" });
+      return;
+    }
+
+    const focused = resolveFocusedDomain(domains, this.focusedDomainPath);
+    if (!focused) return;
+    if (focused.path !== this.focusedDomainPath) {
+      this.focusedDomainPath = focused.path;
+      void this.controller.setFocusedDomainPath(focused.path);
+    }
+
+    const overview = parent.createDiv({ cls: "akd-domain-overview" });
+    const rail = overview.createEl("nav", {
+      cls: "akd-domain-rail",
+      attr: { "aria-label": "知识领域" }
     });
-    const notes = card.createDiv({ cls: "akd-recent-notes" });
-    area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
-    if (area.recentNotes.length === 0) notes.createEl("small", { text: "暂无最近笔记" });
-    const all = card.createEl("button", { cls: "akd-area-link", text: "查看全部" });
-    all.addEventListener("click", () => {
-      this.activePage = page;
+    const railTitle = rail.createDiv({ cls: "akd-domain-rail-title" });
+    railTitle.createSpan({ cls: "akd-domain-rail-mark", text: "◇" });
+    railTitle.createSpan({ text: "知识领域" });
+
+    const tabs = overview.createDiv({ cls: "akd-domain-tabs" });
+    domains.forEach((domain) => {
+      this.renderDomainSelector(rail, domain, focused.path, false);
+      this.renderDomainSelector(tabs, domain, focused.path, true);
+    });
+    this.renderFocusedDomain(overview, focused);
+  }
+
+  private renderDomainSelector(
+    parent: HTMLElement,
+    domain: DomainSummary,
+    focusedPath: string,
+    compact: boolean
+  ): void {
+    const selected = domain.path === focusedPath;
+    const button = parent.createEl("button", {
+      cls: ["akd-domain-button", compact ? "akd-domain-tab" : "", selected ? "is-active" : ""]
+        .filter(Boolean).join(" "),
+      attr: {
+        title: domain.name,
+        "aria-pressed": String(selected)
+      }
+    });
+    button.createSpan({ cls: "akd-domain-icon", text: domainShortLabel(domain.name) });
+    if (!compact) {
+      const copy = button.createSpan({ cls: "akd-domain-copy" });
+      copy.createEl("strong", { text: domain.name });
+      copy.createEl("small", {
+        text: domain.latestMtime === null
+          ? `${domain.count} 篇 · 暂无活动`
+          : `${domain.count} 篇 · ${formatRelativeTime(domain.latestMtime)}`
+      });
+    }
+    button.addEventListener("click", () => {
+      this.focusedDomainPath = domain.path;
+      void this.controller.setFocusedDomainPath(domain.path);
+      this.render();
+    });
+  }
+
+  private renderFocusedDomain(parent: HTMLElement, domain: DomainSummary): void {
+    const focus = parent.createDiv({ cls: "akd-domain-focus" });
+    const header = focus.createDiv({ cls: "akd-domain-focus-header" });
+    const heading = header.createDiv();
+    heading.createEl("h3", { text: domain.name });
+    heading.createEl("small", {
+      text: domain.latestMtime === null
+        ? `${domain.count} 篇 · 暂无活动`
+        : `${domain.count} 篇 · 最近活动 ${formatRelativeTime(domain.latestMtime)}`
+    });
+    header.createEl("small", { text: "当前聚焦" });
+    focus.createDiv({
+      cls: "akd-domain-location",
+      text: `最近活动位置：${domain.recentLocation}`
+    });
+    focus.createEl("p", { cls: "akd-domain-recent-label", text: "最近 3 篇笔记" });
+    if (domain.recentNotes.length === 0) {
+      focus.createDiv({ cls: "akd-domain-empty", text: "暂无 Markdown 笔记。" });
+    } else {
+      const notes = focus.createDiv({ cls: "akd-domain-recent-notes" });
+      domain.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
+    }
+    const enter = focus.createEl("button", {
+      cls: "akd-enter-domain",
+      text: `进入 ${domain.name} 领域 →`
+    });
+    enter.addEventListener("click", () => {
+      this.focusedKnowledgePath = domain.path;
+      this.activePage = "knowledge";
       this.render();
     });
   }
 
   private renderRecentNote(parent: HTMLElement, note: RecentNote): void {
-    const button = parent.createEl("button", { cls: "akd-recent-note" });
-    button.createSpan({ text: note.title });
+    const button = parent.createEl("button", {
+      cls: "akd-recent-note",
+      attr: { title: note.title }
+    });
+    button.createSpan({ cls: "akd-recent-note-title", text: note.title });
     button.createEl("small", { text: formatRelativeTime(note.mtime) });
     button.addEventListener("click", () => {
       const file = this.app.vault.getFileByPath(note.path);

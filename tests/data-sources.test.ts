@@ -13,7 +13,8 @@ class MemoryVaultReader implements VaultReader {
 
   constructor(
     private readonly files: Record<string, string>,
-    private readonly mtimes: Record<string, number> = {}
+    private readonly mtimes: Record<string, number> = {},
+    private readonly folders: string[] = []
   ) {}
 
   async exists(path: string): Promise<boolean> {
@@ -29,6 +30,12 @@ class MemoryVaultReader implements VaultReader {
     return Object.keys(this.files)
       .filter((file) => file.startsWith(`${path}/`) && file.endsWith(".md"))
       .map((file, index) => ({ path: file, mtime: this.mtimes[file] ?? index + 1 }));
+  }
+
+  async listFolders(path: string): Promise<string[]> {
+    const prefix = `${path}/`;
+    return this.folders.filter((folder) => folder.startsWith(prefix)
+      && !folder.slice(prefix.length).includes("/"));
   }
 }
 
@@ -160,5 +167,39 @@ describe("bounded data sources", () => {
     expect(snapshot.areas.domain.signal.text).toContain("it");
     expect(snapshot.areas.domain.signal.text).toContain("java");
     expect(snapshot.areas.wiki.signal).toEqual({ tone: "attention", text: "Domain 有更晚更新" });
+  });
+
+  it("builds direct Domain summaries with stable activity ordering", async () => {
+    const reader = new MemoryVaultReader({
+      "domain/it/java/one.md": "# One",
+      "domain/it/java/two.md": "# Two",
+      "domain/it/db/three.md": "# Three",
+      "domain/it/db/four.md": "# Four",
+      "domain/ai/agent.md": "# Agent"
+    }, {
+      "domain/it/java/one.md": 40,
+      "domain/it/java/two.md": 30,
+      "domain/it/db/three.md": 20,
+      "domain/it/db/four.md": 10,
+      "domain/ai/agent.md": 50
+    }, ["domain/it", "domain/ai", "domain/finance"]);
+
+    const snapshot = await collectLocalSnapshot(reader, structuredClone(DEFAULT_SETTINGS));
+
+    expect(snapshot.domains.map((domain) => domain.path)).toEqual([
+      "domain/ai", "domain/it", "domain/finance"
+    ]);
+    expect(snapshot.domains[1]).toMatchObject({
+      name: "it",
+      count: 4,
+      latestMtime: 40,
+      recentLocation: "it / java"
+    });
+    expect(snapshot.domains[1].recentNotes.map((note) => note.path)).toEqual([
+      "domain/it/java/one.md",
+      "domain/it/java/two.md",
+      "domain/it/db/three.md"
+    ]);
+    expect(snapshot.domains[2]).toMatchObject({ count: 0, latestMtime: null, recentNotes: [] });
   });
 });

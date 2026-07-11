@@ -77,4 +77,10 @@ describe("dashboard settings", () => {
       path: ""
     });
   });
+
+  it("normalizes the local focused Domain path without exposing an empty preference", () => {
+    expect(migrateSettings({ focusedDomainPath: " domain\\it " }).focusedDomainPath)
+      .toBe("domain/it");
+    expect(migrateSettings({ focusedDomainPath: " / " }).focusedDomainPath).toBeUndefined();
+  });
 });

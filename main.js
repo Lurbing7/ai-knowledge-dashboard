@@ -217,6 +217,11 @@ var ObsidianVaultReader = class {
     const prefix = `${path}/`;
     return this.app.vault.getMarkdownFiles().filter((file) => file.path === path || file.path.startsWith(prefix)).map((file) => ({ path: file.path, mtime: file.stat.mtime }));
   }
+  async listFolders(path) {
+    const folder = this.app.vault.getFolderByPath(path);
+    if (!folder) return [];
+    return folder.children.filter((child) => "children" in child).map((child) => child.path);
+  }
 };
 var MAX_SUMMARY_LENGTH = 12e3;
 function truncate(value) {
@@ -317,6 +322,30 @@ function topLevel(path, root) {
 function areaSummary(files, signal) {
   return { count: files.length, recentNotes: recentNotes(files), signal };
 }
+function buildDomainSummary(folderPath, files) {
+  var _a, _b, _c, _d;
+  const name = folderPath.split("/").pop() || folderPath;
+  const owned = files.filter((file) => file.path.startsWith(`${folderPath}/`));
+  const latest = recentNotes(owned);
+  const relativeParts = (_b = (_a = latest[0]) == null ? void 0 : _a.path.slice(folderPath.length + 1).split("/")) != null ? _b : [];
+  const parentParts = relativeParts.slice(0, -1);
+  return {
+    name,
+    path: folderPath,
+    count: owned.length,
+    latestMtime: (_d = (_c = latest[0]) == null ? void 0 : _c.mtime) != null ? _d : null,
+    recentLocation: [name, ...parentParts].join(" / "),
+    recentNotes: latest
+  };
+}
+async function buildDomainSummaries(reader, setting, files) {
+  if (!setting.enabled || !await reader.exists(setting.path)) return [];
+  const folders = await reader.listFolders(setting.path);
+  return folders.map((path) => buildDomainSummary(path, files)).sort((left, right) => {
+    var _a, _b;
+    return ((_a = right.latestMtime) != null ? _a : -1) - ((_b = left.latestMtime) != null ? _b : -1) || left.name.localeCompare(right.name, "zh-Hans-CN");
+  });
+}
 function buildAreas(files, settings, now) {
   const weekAgo = now - 7 * 24 * 60 * 60 * 1e3;
   const inboxChanges = files.inbox.filter((file) => file.mtime >= weekAgo).length;
@@ -364,6 +393,7 @@ async function collectLocalSnapshot(reader, settings, now = Date.now()) {
     wiki: areaFiles.wiki.length
   };
   const areas = buildAreas(areaFiles, settings, now);
+  const domains = await buildDomainSummaries(reader, settings.sources.domain, areaFiles.domain);
   let projectsSummary = "";
   if (settings.sources.projects.enabled && await reader.exists(settings.sources.projects.path)) {
     const actionPath = `${settings.sources.projects.path}/00-\u884C\u52A8\u770B\u677F.md`;
@@ -396,6 +426,7 @@ async function collectLocalSnapshot(reader, settings, now = Date.now()) {
   return {
     counts,
     areas,
+    domains,
     projectsSummary,
     healthSummary,
     tasks,
@@ -733,7 +764,8 @@ function migrateSettings(value) {
     deepseekReasoningEffort: candidate.deepseekReasoningEffort === "max" ? "max" : "high",
     deepseekSecretName: typeof candidate.deepseekSecretName === "string" ? candidate.deepseekSecretName.trim() : "",
     sources: migrateSources(candidate.sources),
-    latestAdvice: isAdviceState(candidate.latestAdvice) ? candidate.latestAdvice : null
+    latestAdvice: isAdviceState(candidate.latestAdvice) ? candidate.latestAdvice : null,
+    focusedDomainPath: normalizePath(candidate.focusedDomainPath) || void 0
   };
 }
 
@@ -824,12 +856,20 @@ var DashboardSettingTab = class extends import_obsidian2.PluginSettingTab {
 
 // src/views/dashboard-view.ts
 var import_obsidian3 = require("obsidian");
+
+// src/domain-focus.ts
+function resolveFocusedDomain(domains, preferredPath) {
+  var _a, _b;
+  return (_b = (_a = domains.find((domain) => domain.path === preferredPath)) != null ? _a : domains[0]) != null ? _b : null;
+}
+function domainShortLabel(name) {
+  var _a;
+  const characters = Array.from(name.trim());
+  return (characters.length <= 3 ? characters.join("") : (_a = characters[0]) != null ? _a : "?").toUpperCase();
+}
+
+// src/views/dashboard-view.ts
 var DASHBOARD_VIEW_TYPE = "ai-knowledge-dashboard-view";
-var EMPTY_AREA = {
-  count: 0,
-  recentNotes: [],
-  signal: { tone: "neutral", text: "\u6682\u65E0\u7B14\u8BB0" }
-};
 function formatRelativeTime(mtime, now = Date.now()) {
   const seconds = Math.max(0, Math.floor((now - mtime) / 1e3));
   if (seconds < 60) return "\u521A\u521A";
@@ -849,7 +889,9 @@ var DashboardView = class extends import_obsidian3.ItemView {
     this.generating = false;
     this.generationStartedAt = 0;
     this.generationTimer = null;
+    this.focusedKnowledgePath = null;
     this.state = controller.store.state;
+    this.focusedDomainPath = controller.settings.focusedDomainPath;
   }
   getViewType() {
     return DASHBOARD_VIEW_TYPE;
@@ -908,12 +950,12 @@ var DashboardView = class extends import_obsidian3.ItemView {
     renderPageButton(navigation, "dashboard", "Dashboard", "akd-nav-home");
     const scroll = navigation.createDiv({ cls: "akd-nav-scroll" });
     const pages = [
-      ["inbox", "Inbox"],
+      ["tasks", "Action Guide"],
       ["projects", "Projects"],
+      ["inbox", "Inbox"],
       ["knowledge", "Knowledge Map"],
       ["wiki", "Wiki"],
-      ["health", "Health"],
-      ["tasks", "Action Guide"]
+      ["health", "Health"]
     ];
     pages.forEach(([page, label]) => {
       renderPageButton(scroll, page, label);
@@ -925,17 +967,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
     settings.addEventListener("click", () => this.controller.openSettings());
   }
   renderDashboard(parent) {
-    var _a, _b, _c, _d, _e, _f, _g;
-    const header = parent.createDiv({ cls: "akd-hero" });
-    header.createEl("span", { text: "NEXT ACTIONS" });
-    header.createEl("h1", { text: "AI Knowledge Dashboard" });
-    header.createEl("p", { text: "\u672C\u5730\u72B6\u6001\u7531 Vault \u4E8B\u4EF6\u5237\u65B0\uFF1B\u53EA\u6709\u4F60\u70B9\u51FB\u540E\u624D\u8C03\u7528 DeepSeek\u3002" });
-    const areas = (_a = this.state.snapshot) == null ? void 0 : _a.areas;
-    const stats = parent.createDiv({ cls: "akd-progress-cards" });
-    this.renderAreaCard(stats, (_b = areas == null ? void 0 : areas.inbox) != null ? _b : EMPTY_AREA, "Inbox", "inbox");
-    this.renderAreaCard(stats, (_c = areas == null ? void 0 : areas.domain) != null ? _c : EMPTY_AREA, "Domain", "knowledge");
-    this.renderAreaCard(stats, (_d = areas == null ? void 0 : areas.projects) != null ? _d : EMPTY_AREA, "Projects", "projects");
-    this.renderAreaCard(stats, (_e = areas == null ? void 0 : areas.wiki) != null ? _e : EMPTY_AREA, "Wiki", "wiki");
+    var _a, _b;
     if (this.state.issues.length > 0) {
       const issues = parent.createDiv({ cls: "akd-message akd-message-error" });
       issues.createEl("strong", { text: "Configuration or refresh issue" });
@@ -944,7 +976,7 @@ var DashboardView = class extends import_obsidian3.ItemView {
     }
     const controls = parent.createDiv({ cls: "akd-ai-controls" });
     controls.createEl("h2", { text: "\u4E0B\u4E00\u6B65\u884C\u52A8\u5EFA\u8BAE" });
-    const sources = (_g = (_f = this.state.context) == null ? void 0 : _f.sourceTypes) != null ? _g : [];
+    const sources = (_b = (_a = this.state.context) == null ? void 0 : _a.sourceTypes) != null ? _b : [];
     controls.createEl("p", { text: `\u672C\u6B21\u6570\u636E\u7C7B\u578B\uFF1A${sources.join("\u3001") || "\u5C1A\u65E0\u53EF\u7528\u6570\u636E"}` });
     const hasProfile = sources.includes("\u7528\u6237\u753B\u50CF\u4F18\u5148\u7EA7");
     if (hasProfile) {
@@ -963,6 +995,10 @@ var DashboardView = class extends import_obsidian3.ItemView {
     button.addEventListener("click", () => void this.generate());
     this.renderGenerationStatus(parent);
     this.renderAdvice(parent);
+    const overview = parent.createDiv({ cls: "akd-overview-header" });
+    overview.createEl("h2", { text: "\u77E5\u8BC6\u9886\u57DF" });
+    overview.createEl("p", { text: "\u6309\u6700\u8FD1\u6D3B\u52A8\u6392\u5E8F" });
+    this.renderDomainOverview(parent);
   }
   async generate() {
     if (this.generating) return;
@@ -1054,18 +1090,38 @@ var DashboardView = class extends import_obsidian3.ItemView {
     folder.children.filter((child) => child instanceof import_obsidian3.TFolder).forEach((child) => {
       const count = this.app.vault.getMarkdownFiles().filter((file) => file.path.startsWith(`${child.path}/`)).length;
       const card = grid.createDiv({ cls: "akd-map-card" });
+      card.dataset.domainPath = child.path;
       card.createEl("h3", { text: child.name });
       card.createEl("p", { text: `${count} notes` });
+      if (child.path === this.focusedKnowledgePath) {
+        card.addClass("is-focused-domain");
+        requestAnimationFrame(() => card.scrollIntoView({ block: "nearest" }));
+      }
     });
   }
   renderHealth(parent) {
     var _a;
-    this.renderPageHeader(parent, "Health", this.controller.settings.sources.health.path);
+    const source2 = this.controller.settings.sources.health;
+    this.renderPageHeader(parent, "Health", source2.enabled ? source2.path : "\u672A\u914D\u7F6E");
+    if (!source2.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Health \u6570\u636E\u6E90\u672A\u542F\u7528\u3002" });
+      return;
+    }
     const summary = (_a = this.state.snapshot) == null ? void 0 : _a.healthSummary;
-    parent.createEl("pre", {
-      cls: "akd-health-summary",
-      text: summary || "Health \u6570\u636E\u6E90\u672A\u542F\u7528\u3001\u7F3A\u5931\u6216\u6CA1\u6709\u53EF\u89E3\u6790\u5185\u5BB9\u3002"
-    });
+    if (summary) {
+      const content = parent.createDiv({ cls: "akd-health-content markdown-rendered" });
+      void import_obsidian3.MarkdownRenderer.render(this.app, summary, content, source2.path, this);
+    } else {
+      parent.createDiv({ cls: "akd-message", text: "Health \u6570\u636E\u6E90\u7F3A\u5931\u6216\u6CA1\u6709\u53EF\u89E3\u6790\u5185\u5BB9\u3002" });
+    }
+    const file = this.app.vault.getFileByPath(source2.path);
+    if (file) {
+      const openSource = parent.createEl("button", {
+        cls: "akd-health-source",
+        text: "\u6253\u5F00 Health \u539F\u6587"
+      });
+      openSource.addEventListener("click", () => void this.openFile(file));
+    }
   }
   renderTasks(parent) {
     var _a, _b;
@@ -1087,27 +1143,99 @@ var DashboardView = class extends import_obsidian3.ItemView {
     header.createEl("h1", { text: title });
     header.createEl("p", { text: description });
   }
-  renderAreaCard(parent, area, label, page) {
-    const card = parent.createDiv({ cls: "akd-progress-card akd-area-card" });
-    const heading = card.createDiv({ cls: "akd-area-heading" });
-    heading.createEl("span", { text: label });
-    heading.createEl("strong", { text: String(area.count) });
-    card.createDiv({
-      cls: `akd-area-signal is-${area.signal.tone}`,
-      text: area.signal.text
+  renderDomainOverview(parent) {
+    var _a, _b;
+    const source2 = this.controller.settings.sources.domain;
+    if (!source2.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Domain \u6570\u636E\u6E90\u672A\u542F\u7528\u3002" });
+      return;
+    }
+    if (this.state.issues.some((issue) => issue.startsWith("Domain \u8DEF\u5F84\u4E0D\u5B58\u5728"))) return;
+    const domains = (_b = (_a = this.state.snapshot) == null ? void 0 : _a.domains) != null ? _b : [];
+    if (domains.length === 0) {
+      parent.createDiv({ cls: "akd-message", text: "Domain \u4E0B\u6682\u65E0\u77E5\u8BC6\u9886\u57DF\u3002" });
+      return;
+    }
+    const focused = resolveFocusedDomain(domains, this.focusedDomainPath);
+    if (!focused) return;
+    if (focused.path !== this.focusedDomainPath) {
+      this.focusedDomainPath = focused.path;
+      void this.controller.setFocusedDomainPath(focused.path);
+    }
+    const overview = parent.createDiv({ cls: "akd-domain-overview" });
+    const rail = overview.createEl("nav", {
+      cls: "akd-domain-rail",
+      attr: { "aria-label": "\u77E5\u8BC6\u9886\u57DF" }
     });
-    const notes = card.createDiv({ cls: "akd-recent-notes" });
-    area.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
-    if (area.recentNotes.length === 0) notes.createEl("small", { text: "\u6682\u65E0\u6700\u8FD1\u7B14\u8BB0" });
-    const all = card.createEl("button", { cls: "akd-area-link", text: "\u67E5\u770B\u5168\u90E8" });
-    all.addEventListener("click", () => {
-      this.activePage = page;
+    const railTitle = rail.createDiv({ cls: "akd-domain-rail-title" });
+    railTitle.createSpan({ cls: "akd-domain-rail-mark", text: "\u25C7" });
+    railTitle.createSpan({ text: "\u77E5\u8BC6\u9886\u57DF" });
+    const tabs = overview.createDiv({ cls: "akd-domain-tabs" });
+    domains.forEach((domain) => {
+      this.renderDomainSelector(rail, domain, focused.path, false);
+      this.renderDomainSelector(tabs, domain, focused.path, true);
+    });
+    this.renderFocusedDomain(overview, focused);
+  }
+  renderDomainSelector(parent, domain, focusedPath, compact) {
+    const selected = domain.path === focusedPath;
+    const button = parent.createEl("button", {
+      cls: ["akd-domain-button", compact ? "akd-domain-tab" : "", selected ? "is-active" : ""].filter(Boolean).join(" "),
+      attr: {
+        title: domain.name,
+        "aria-pressed": String(selected)
+      }
+    });
+    button.createSpan({ cls: "akd-domain-icon", text: domainShortLabel(domain.name) });
+    if (!compact) {
+      const copy = button.createSpan({ cls: "akd-domain-copy" });
+      copy.createEl("strong", { text: domain.name });
+      copy.createEl("small", {
+        text: domain.latestMtime === null ? `${domain.count} \u7BC7 \xB7 \u6682\u65E0\u6D3B\u52A8` : `${domain.count} \u7BC7 \xB7 ${formatRelativeTime(domain.latestMtime)}`
+      });
+    }
+    button.addEventListener("click", () => {
+      this.focusedDomainPath = domain.path;
+      void this.controller.setFocusedDomainPath(domain.path);
+      this.render();
+    });
+  }
+  renderFocusedDomain(parent, domain) {
+    const focus = parent.createDiv({ cls: "akd-domain-focus" });
+    const header = focus.createDiv({ cls: "akd-domain-focus-header" });
+    const heading = header.createDiv();
+    heading.createEl("h3", { text: domain.name });
+    heading.createEl("small", {
+      text: domain.latestMtime === null ? `${domain.count} \u7BC7 \xB7 \u6682\u65E0\u6D3B\u52A8` : `${domain.count} \u7BC7 \xB7 \u6700\u8FD1\u6D3B\u52A8 ${formatRelativeTime(domain.latestMtime)}`
+    });
+    header.createEl("small", { text: "\u5F53\u524D\u805A\u7126" });
+    focus.createDiv({
+      cls: "akd-domain-location",
+      text: `\u6700\u8FD1\u6D3B\u52A8\u4F4D\u7F6E\uFF1A${domain.recentLocation}`
+    });
+    focus.createEl("p", { cls: "akd-domain-recent-label", text: "\u6700\u8FD1 3 \u7BC7\u7B14\u8BB0" });
+    if (domain.recentNotes.length === 0) {
+      focus.createDiv({ cls: "akd-domain-empty", text: "\u6682\u65E0 Markdown \u7B14\u8BB0\u3002" });
+    } else {
+      const notes = focus.createDiv({ cls: "akd-domain-recent-notes" });
+      domain.recentNotes.forEach((note) => this.renderRecentNote(notes, note));
+    }
+    const enter = focus.createEl("button", {
+      cls: "akd-enter-domain",
+      text: `\u8FDB\u5165 ${domain.name} \u9886\u57DF \u2192`
+    });
+    enter.addEventListener("click", () => {
+      this.focusedKnowledgePath = domain.path;
+      this.activePage = "knowledge";
       this.render();
     });
   }
   renderRecentNote(parent, note) {
-    const button = parent.createEl("button", { cls: "akd-recent-note" });
-    button.createSpan({ text: note.title });
+    const button = parent.createEl("button", {
+      cls: "akd-recent-note",
+      attr: { title: note.title }
+    });
+    button.createSpan({ cls: "akd-recent-note-title", text: note.title });
     button.createEl("small", { text: formatRelativeTime(note.mtime) });
     button.addEventListener("click", () => {
       const file = this.app.vault.getFileByPath(note.path);
@@ -1177,6 +1305,12 @@ var AiKnowledgeDashboardPlugin = class extends import_obsidian4.Plugin {
     this.settings = migrateSettings(this.settings);
     await this.saveData(this.settings);
     await this.store.refresh();
+  }
+  async setFocusedDomainPath(path) {
+    const normalized = normalizePath(path);
+    if (!normalized || this.settings.focusedDomainPath === normalized) return;
+    this.settings.focusedDomainPath = normalized;
+    await this.saveData(this.settings);
   }
   async testDeepSeekConnection() {
     const apiKey = this.getDeepSeekApiKey();

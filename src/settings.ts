@@ -94,6 +94,7 @@ export function migrateSettings(value: unknown): DashboardSettings {
       ? candidate.deepseekSecretName.trim()
       : "",
     sources: migrateSources(candidate.sources),
-    latestAdvice: isAdviceState(candidate.latestAdvice) ? candidate.latestAdvice : null
+    latestAdvice: isAdviceState(candidate.latestAdvice) ? candidate.latestAdvice : null,
+    focusedDomainPath: normalizePath(candidate.focusedDomainPath) || undefined
   };
 }

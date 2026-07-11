@@ -45,6 +45,7 @@ export interface DashboardSettings {
   deepseekSecretName: string;
   sources: DashboardSources;
   latestAdvice: AdviceState | null;
+  focusedDomainPath?: string;
 }
 
 export interface TaskSummary {
@@ -57,6 +58,15 @@ export interface RecentNote {
   title: string;
   path: string;
   mtime: number;
+}
+
+export interface DomainSummary {
+  name: string;
+  path: string;
+  count: number;
+  latestMtime: number | null;
+  recentLocation: string;
+  recentNotes: RecentNote[];
 }
 
 export interface AreaSignal {
@@ -85,6 +95,7 @@ export interface LocalSnapshot {
     wiki: number;
   };
   areas: AreaSummaries;
+  domains: DomainSummary[];
   projectsSummary: string;
   healthSummary: string;
   tasks: TaskSummary[];

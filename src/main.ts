@@ -6,7 +6,7 @@ import { ObsidianVaultReader, collectLocalSnapshot } from "./data-sources";
 import { DeepSeekClient } from "./deepseek-client";
 import { ObsidianDeepSeekTransport } from "./obsidian-deepseek-transport";
 import { openPluginSettings, type ObsidianSettingsHost } from "./open-plugin-settings";
-import { migrateSettings } from "./settings";
+import { migrateSettings, normalizePath } from "./settings";
 import { DashboardSettingTab, type SettingsController } from "./settings-tab";
 import type { ActionContext, DashboardSettings } from "./types";
 import {
@@ -80,6 +80,13 @@ export default class AiKnowledgeDashboardPlugin extends Plugin
     this.settings = migrateSettings(this.settings);
     await this.saveData(this.settings);
     await this.store.refresh();
+  }
+
+  async setFocusedDomainPath(path: string): Promise<void> {
+    const normalized = normalizePath(path);
+    if (!normalized || this.settings.focusedDomainPath === normalized) return;
+    this.settings.focusedDomainPath = normalized;
+    await this.saveData(this.settings);
   }
 
   async testDeepSeekConnection(): Promise<void> {
