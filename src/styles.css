@@ -619,15 +619,34 @@
   color: var(--akd-muted);
 }
 
-.akd-health-summary {
-  max-height: 60vh;
+.akd-health-content {
   padding: 18px;
-  overflow: auto;
-  white-space: pre-wrap;
   border: 1px solid var(--akd-line);
   border-radius: 12px;
   background: var(--background-secondary);
   color: var(--text-normal);
+}
+
+.akd-health-content > :first-child {
+  margin-top: 0;
+}
+
+.akd-health-content > :last-child {
+  margin-bottom: 0;
+}
+
+.akd-health-source {
+  appearance: none;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 14px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--akd-accent);
+  font-weight: 800;
+  cursor: pointer;
 }
 
 .theme-dark .akd-view {

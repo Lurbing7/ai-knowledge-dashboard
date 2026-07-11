@@ -1,4 +1,4 @@
-import { ItemView, TFolder, WorkspaceLeaf } from "obsidian";
+import { ItemView, MarkdownRenderer, TFolder, WorkspaceLeaf } from "obsidian";
 import type { DashboardStore } from "../dashboard-store";
 import type { AreaSummary, DashboardSettings, DashboardState, DataSourceSetting, RecentNote } from "../types";
 
@@ -270,12 +270,29 @@ export class DashboardView extends ItemView {
   }
 
   private renderHealth(parent: HTMLElement): void {
-    this.renderPageHeader(parent, "Health", this.controller.settings.sources.health.path);
+    const source = this.controller.settings.sources.health;
+    this.renderPageHeader(parent, "Health", source.enabled ? source.path : "未配置");
+    if (!source.enabled) {
+      parent.createDiv({ cls: "akd-message", text: "Health 数据源未启用。" });
+      return;
+    }
+
     const summary = this.state.snapshot?.healthSummary;
-    parent.createEl("pre", {
-      cls: "akd-health-summary",
-      text: summary || "Health 数据源未启用、缺失或没有可解析内容。"
-    });
+    if (summary) {
+      const content = parent.createDiv({ cls: "akd-health-content markdown-rendered" });
+      void MarkdownRenderer.render(this.app, summary, content, source.path, this);
+    } else {
+      parent.createDiv({ cls: "akd-message", text: "Health 数据源缺失或没有可解析内容。" });
+    }
+
+    const file = this.app.vault.getFileByPath(source.path);
+    if (file) {
+      const openSource = parent.createEl("button", {
+        cls: "akd-health-source",
+        text: "打开 Health 原文"
+      });
+      openSource.addEventListener("click", () => void this.openFile(file));
+    }
   }
 
   private renderTasks(parent: HTMLElement): void {

@@ -83,6 +83,17 @@ describe("final source contract", () => {
     expect(dashboardViewSource).toContain('text: "查看 →"');
   });
 
+  it("renders the Health summary as Obsidian Markdown and links to its source", () => {
+    expect(dashboardViewSource).toContain("MarkdownRenderer");
+    expect(dashboardViewSource).toContain("MarkdownRenderer.render");
+    expect(dashboardViewSource).toContain("打开 Health 原文");
+    expect(dashboardViewSource).toContain("akd-health-content");
+    expect(dashboardViewSource).not.toContain('createEl("pre"');
+    expect(dashboardViewSource).not.toContain("akd-health-summary");
+    expect(dashboardStyles).toContain(".akd-health-content");
+    expect(dashboardStyles).not.toContain(".akd-health-summary");
+  });
+
   it("opens plugin settings instead of showing an instruction notice", () => {
     expect(dashboardViewSource).toContain("controller.openSettings");
     expect(dashboardViewSource).not.toContain("Open Settings → Community plugins");
